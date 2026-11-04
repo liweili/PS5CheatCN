@@ -1,0 +1,59 @@
+name: Build & Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: 安装依赖
+        run: npm ci
+
+      - name: 运行测试
+        run: npm test
+
+      - name: 生成图标（SVG → PNG → ICO）
+        shell: pwsh
+        run: |
+          # 用 Electron 自带的 Chromium 渲染 SVG 图标
+          npx electron render-icon.js --no-sandbox
+          # 打包成多尺寸 ICO
+          node build-ico.js build/icon.png build/icon.ico
+
+      - name: 打包 Windows 安装程序
+        run: npx electron-builder --win nsis zip --x64
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 上传 Release 产物
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/*.exe
+            dist/*.blockmap
+            dist/*.zip
+          generate_release_notes: true
+          draft: false
+
+      - name: 上传构建产物（无 tag 时）
+        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ps5-cheat-cn-win
+          path: |
+            dist/*.exe
+            dist/*.zip
+          retention-days: 30

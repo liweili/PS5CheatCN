@@ -1,0 +1,115 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <!-- 背景渐变：深夜蓝 → 电光青 -->
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#151a3d"/>
+      <stop offset="55%" stop-color="#1b3a6b"/>
+      <stop offset="100%" stop-color="#0e7c9b"/>
+    </linearGradient>
+    <!-- 内部高光 -->
+    <radialGradient id="glow" cx="0.5" cy="0.38" r="0.62">
+      <stop offset="0%" stop-color="#4fd8ff" stop-opacity="0.42"/>
+      <stop offset="100%" stop-color="#4fd8ff" stop-opacity="0"/>
+    </radialGradient>
+    <!-- 暖金强调色 -->
+    <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#ffd479"/>
+      <stop offset="100%" stop-color="#f5a623"/>
+    </linearGradient>
+  </defs>
+
+  <!-- 圆角方形底 -->
+  <rect x="32" y="32" width="960" height="960" rx="216" fill="url(#bg)"/>
+  <rect x="32" y="32" width="960" height="960" rx="216" fill="url(#glow)"/>
+
+  <!-- 细描边，增加质感 -->
+  <rect x="44" y="44" width="936" height="936" rx="206" fill="none"
+        stroke="#7fe6ff" stroke-opacity="0.28" stroke-width="5"/>
+
+  <!-- 左：游戏手柄（实心剪影 + 镂空按键，象征 PS 金手指） -->
+  <g transform="translate(140, 400)">
+    <!-- 手柄剪影：圆角矩形主体 + 两个下倾握把 -->
+    <g fill="#eaf7ff">
+      <rect x="18" y="0" width="200" height="96" rx="46"/>
+      <!-- 左握把 -->
+      <path d="M18 60 Q0 78 6 108 Q12 140 38 140 Q58 140 62 116 L70 96 Z"/>
+      <!-- 右握把 -->
+      <path d="M218 60 Q236 78 230 108 Q224 140 198 140 Q178 140 174 116 L166 96 Z"/>
+    </g>
+    <!-- 镂空：左摇杆 -->
+    <circle cx="78" cy="48" r="20" fill="#123055"/>
+    <!-- 镂空：右侧四键（菱形排列） -->
+    <g fill="#123055">
+      <circle cx="168" cy="30" r="11"/>
+      <circle cx="192" cy="52" r="11"/>
+      <circle cx="168" cy="74" r="11"/>
+      <circle cx="144" cy="52" r="11"/>
+    </g>
+  </g>
+
+  <!-- 右上：文档卡片（代表文件/条目列表） -->
+  <g transform="translate(520, 176)">
+    <path d="M0 40 Q0 0 40 0 L212 0 L300 88 L300 292 Q300 332 260 332 L40 332
+             Q0 332 0 292 Z"
+          fill="#f4fbff" fill-opacity="0.96"/>
+    <!-- 折角 -->
+    <path d="M212 0 L300 88 L226 88 Q212 88 212 74 Z" fill="#b8e6f7"/>
+    <!-- 文本行 -->
+    <g fill="#2b6a9e" opacity="0.55">
+      <rect x="40" y="132" width="196" height="17" rx="8.5"/>
+      <rect x="40" y="176" width="164" height="17" rx="8.5"/>
+      <rect x="40" y="220" width="212" height="17" rx="8.5"/>
+      <rect x="40" y="264" width="120" height="17" rx="8.5"/>
+    </g>
+  </g>
+
+  <!-- 右下：翻译箭头 A → 文（金色，代表汉化转换） -->
+  <g transform="translate(560, 556)">
+    <!-- 圆底 -->
+    <circle cx="150" cy="150" r="146" fill="#0b1e3a" fill-opacity="0.55"/>
+    <circle cx="150" cy="150" r="146" fill="none" stroke="#ffd479" stroke-opacity="0.5" stroke-width="6"/>
+
+    <!-- 左侧 A -->
+    <g fill="#eaf7ff">
+      <path d="M44 236 L92 78 L114 78 L162 236 L132 236 L122 208 L84 208 L74 236 Z
+               M92 186 L114 186 L103 140 Z" fill-rule="evenodd"/>
+    </g>
+
+    <!-- 中间箭头 -->
+    <g transform="translate(172, 130)">
+      <path d="M0 20 L52 20 L52 0 L92 26 L52 52 L52 32 L0 32 Z" fill="url(#gold)"/>
+    </g>
+
+    <!-- 右侧「文」：点 + 横 + 交叉撇捺 -->
+    <g transform="translate(276, 58)" fill="#eaf7ff">
+      <!-- 顶点 -->
+      <path d="M56 0 L72 0 L70 20 L58 20 Z"/>
+      <!-- 横 -->
+      <path d="M4 28 L124 28 L124 46 L4 46 Z"/>
+      <!-- 撇（从右上向左下） -->
+      <path d="M96 52 L116 56 L52 148 L32 144 Z"/>
+      <!-- 捺（从左上向右下） -->
+      <path d="M32 52 L52 48 L116 144 L96 148 Z"/>
+    </g>
+  </g>
+
+  <!-- 左下角小齿轮（金色点缀，象征编辑/调参） -->
+  <g transform="translate(214, 636)">
+    <g fill="url(#gold)">
+      <!-- 齿轮主体 -->
+      <circle cx="60" cy="60" r="38" fill="none" stroke="url(#gold)" stroke-width="18"/>
+      <!-- 齿 -->
+      <g>
+        <rect x="54" y="6" width="12" height="20" rx="4"/>
+        <rect x="54" y="94" width="12" height="20" rx="4"/>
+        <rect x="6" y="54" width="20" height="12" rx="4"/>
+        <rect x="94" y="54" width="20" height="12" rx="4"/>
+        <rect x="19" y="19" width="12" height="20" rx="4" transform="rotate(-45 25 29)"/>
+        <rect x="89" y="89" width="12" height="20" rx="4" transform="rotate(-45 95 99)"/>
+        <rect x="89" y="19" width="12" height="20" rx="4" transform="rotate(45 95 29)"/>
+        <rect x="19" y="89" width="12" height="20" rx="4" transform="rotate(45 25 99)"/>
+      </g>
+      <circle cx="60" cy="60" r="13" fill="#0b1e3a"/>
+    </g>
+  </g>
+</svg>

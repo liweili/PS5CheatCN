@@ -1,0 +1,22 @@
+# 依赖与构建产物
+node_modules/
+dist/
+
+# 图标生成中间产物（源文件 build/icon.svg 保留）
+build/icon.png
+build/icon-src/
+
+# 打包/测试临时文件
+*.log
+*.blockmap
+probe.js
+*-probe.js
+gui-final.js
+v2.js
+
+# 系统与编辑器
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp

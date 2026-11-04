@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'">
+<title>PS5 金手指自动汉化工具</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- 顶部工具栏 -->
+<header class="toolbar">
+  <div class="tb-left">
+    <button id="btnOpen" class="btn btn-primary" title="打开金手指文件 (Ctrl+O)">
+      <span class="ico">📂</span> 打开文件
+    </button>
+    <button id="btnSave" class="btn" title="保存 (Ctrl+S)" disabled>
+      <span class="ico">💾</span> 保存
+    </button>
+    <button id="btnSaveAs" class="btn" title="另存为 (Ctrl+Shift+S)" disabled>
+      <span class="ico">📑</span> 另存为
+    </button>
+    <span class="sep"></span>
+    <button id="btnTranslateAll" class="btn btn-accent" title="自动汉化全部 (Ctrl+T)" disabled>
+      <span class="ico">🌐</span> 自动汉化全部
+    </button>
+    <button id="btnRevertAll" class="btn" title="撤销全部汉化" disabled>
+      <span class="ico">↺</span> 撤销汉化
+    </button>
+  </div>
+  <div class="tb-right">
+    <span id="fileInfo" class="file-info">未打开文件</span>
+    <button id="btnSettings" class="btn btn-ghost" title="设置">⚙</button>
+  </div>
+</header>
+
+<!-- 文件信息条 -->
+<section id="metaBar" class="meta-bar hidden">
+  <div class="meta-item"><label>游戏</label><span id="mGame">—</span></div>
+  <div class="meta-item"><label>Title ID</label><span id="mCusa">—</span></div>
+  <div class="meta-item"><label>版本</label><span id="mVersion">—</span></div>
+  <div class="meta-item"><label>作者</label><span id="mAuthor">—</span></div>
+  <div class="meta-item"><label>格式</label><span id="mFormat" class="fmt-badge">—</span></div>
+  <div class="meta-item"><label>条目</label><span id="mCount">0</span></div>
+</section>
+
+<!-- 主体 -->
+<main class="main">
+  <!-- 左：条目列表 -->
+  <div class="panel list-panel">
+    <div class="panel-head">
+      <h2>修改项列表</h2>
+      <div class="head-tools">
+        <input id="searchBox" type="search" placeholder="搜索名称..." disabled>
+        <label class="chk"><input type="checkbox" id="onlyUntranslated" disabled> 仅未汉化</label>
+      </div>
+    </div>
+    <div class="table-head">
+      <span class="col-idx">#</span>
+      <span class="col-orig">原名称</span>
+      <span class="col-cn">汉化名</span>
+      <span class="col-op">操作</span>
+    </div>
+    <div id="modList" class="mod-list"></div>
+    <div class="list-foot">
+      <span id="statLine">—</span>
+    </div>
+  </div>
+
+  <!-- 右：详情编辑 -->
+  <div class="panel edit-panel">
+    <div class="panel-head">
+      <h2>编辑详情</h2>
+      <div class="head-tools">
+        <button id="btnSaveOne" class="btn btn-small" disabled>应用到本条</button>
+      </div>
+    </div>
+    <div id="editBody" class="edit-body">
+      <div class="empty-state small">
+        <div class="empty-icon">✏️</div>
+        <div class="empty-title">选择左侧条目进行编辑</div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<!-- 状态栏 -->
+<footer class="statusbar">
+  <span id="statusMsg">就绪</span>
+  <span class="spacer"></span>
+  <span id="translateStat" class="stat"></span>
+</footer>
+
+<!-- 设置对话框 -->
+<div id="settingsModal" class="modal hidden">
+  <div class="modal-box">
+    <h3>设置</h3>
+
+    <div class="form-row">
+      <label>署名信息</label>
+      <div class="form-hint">保存时写入文件，例如：————翻译：L.wl，编辑时间20261104————</div>
+      <input type="text" id="setSignature" placeholder="————翻译：L.wl，编辑时间20261104————">
+    </div>
+
+    <div class="form-row">
+      <label>署名方式</label>
+      <select id="setSigMode">
+        <option value="entry">作为独立条目追加（推荐）</option>
+        <option value="suffix">附加到每个条目名称后</option>
+        <option value="none">不写入署名</option>
+      </select>
+    </div>
+
+    <div class="form-row">
+      <label>译者名</label>
+      <input type="text" id="setAuthor" placeholder="L.wl">
+    </div>
+
+    <div class="form-row">
+      <label>转换输出格式</label>
+      <select id="setTarget">
+        <option value="">与原文件相同</option>
+        <option value="json">JSON</option>
+        <option value="shn">SHN (XML)</option>
+        <option value="mc4">MC4 (加密)</option>
+      </select>
+      <div class="form-hint">另存为时使用；选择「与原文件相同」则保持原格式</div>
+    </div>
+
+    <div class="modal-actions">
+      <button id="btnSetCancel" class="btn">取消</button>
+      <button id="btnSetSave" class="btn btn-primary">确定</button>
+    </div>
+  </div>
+</div>
+
+<!-- 转换对话框 -->
+<div id="convertModal" class="modal hidden">
+  <div class="modal-box">
+    <h3>格式转换</h3>
+    <div class="form-hint" style="margin-bottom:14px">
+      将当前金手指转换为其他格式。注意：部分格式特性无法互转（如 SHN 的 Section 字段在 JSON 中不存在）。
+    </div>
+    <div class="convert-row">
+      <div class="convert-card active" data-fmt="json">
+        <div class="conv-icon">📋</div>
+        <div class="conv-name">JSON</div>
+        <div class="conv-desc">明文 · 通用性最好<br>CheatRunner / etaHEN / GoldHEN 均支持</div>
+      </div>
+      <div class="convert-card" data-fmt="shn">
+        <div class="conv-icon">📄</div>
+        <div class="conv-name">SHN</div>
+        <div class="conv-desc">明文 XML<br>PS4 经典格式，含 Section 段位</div>
+      </div>
+      <div class="convert-card" data-fmt="mc4">
+        <div class="conv-icon">🔒</div>
+        <div class="conv-name">MC4</div>
+        <div class="conv-desc">AES-256 加密<br>与官方 mc4-cheat-decrypter 兼容</div>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button id="btnConvCancel" class="btn">取消</button>
+      <button id="btnConvOk" class="btn btn-primary">转换并保存</button>
+    </div>
+  </div>
+</div>
+
+<script src="renderer.js"></script>
+</body>
+</html>

@@ -1,0 +1,85 @@
+{
+  "name": "ps5-cheat-cn",
+  "productName": "PS5金手指自动汉化工具",
+  "version": "1.0.0",
+  "description": "PS5/PS4 金手指自动汉化工具，支持 MC4 / SHN / JSON",
+  "main": "main.js",
+  "author": "L.wl",
+  "scripts": {
+    "start": "electron .",
+    "test": "node test-core.js && node test-gui.js",
+    "dist": "electron-builder --win nsis zip --x64",
+    "icon": "electron render-icon.js --no-sandbox && node build-ico.js build/icon.png build/icon.ico"
+  },
+  "devDependencies": {
+    "electron": "^32.0.0",
+    "electron-builder": "^25.0.0"
+  },
+  "build": {
+    "appId": "com.lwl.ps5cheatcn",
+    "productName": "PS5金手指自动汉化工具",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "index.html",
+      "style.css",
+      "renderer.js",
+      "src/**/*"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "signAndEditExecutable": false,
+      "icon": "build/icon.ico"
+    },
+    "portable": {
+      "artifactName": "PS5金手指自动汉化工具-${version}-便携版.${ext}"
+    },
+    "compression": "maximum",
+    "asar": true,
+    "npmRebuild": false,
+    "buildDependenciesFromSource": false,
+    "electronDist": "node_modules/electron/dist",
+    "electronVersion": "32.3.3",
+    "artifactName": "PS5金手指自动汉化工具-${version}-${arch}.${ext}",
+    "forceCodeSigning": false,
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "PS5金手指自动汉化工具",
+      "menuCategory": false,
+      "runAfterFinish": true,
+      "deleteAppDataOnUninstall": false,
+      "uninstallDisplayName": "PS5金手指自动汉化工具",
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico",
+      "installerHeaderIcon": "build/icon.ico",
+      "allowElevation": false
+    },
+    "extraResources": [
+      {
+        "from": "使用说明.md",
+        "to": "使用说明.md"
+      }
+    ]
+  }
+}
