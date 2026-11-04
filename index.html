@@ -27,6 +27,13 @@
     <button id="btnRevertAll" class="btn" title="撤销全部汉化" disabled>
       <span class="ico">↺</span> 撤销汉化
     </button>
+    <span class="sep"></span>
+    <button id="btnConvert" class="btn" title="转换为其它格式" disabled>
+      <span class="ico">🔄</span> 转换格式
+    </button>
+    <button id="btnViewFull" class="btn" title="查看文件全文内容" disabled>
+      <span class="ico">📄</span> 查看全文
+    </button>
   </div>
   <div class="tb-right">
     <span id="fileInfo" class="file-info">未打开文件</span>
@@ -130,6 +137,71 @@
     <div class="modal-actions">
       <button id="btnSetCancel" class="btn">取消</button>
       <button id="btnSetSave" class="btn btn-primary">确定</button>
+    </div>
+  </div>
+</div>
+
+<!-- 保存对话框 -->
+<div id="saveModal" class="modal hidden">
+  <div class="modal-box">
+    <h3>保存金手指文件</h3>
+
+    <div class="form-row">
+      <label>文件名</label>
+      <input type="text" id="saveFileName" placeholder="CUSA18740_CN.mc4">
+      <div class="ed-hint">默认在原文件名后加 <code>_CN</code> 后缀，可自行修改</div>
+    </div>
+
+    <div class="form-row">
+      <label>保存位置</label>
+      <div style="display:flex;gap:8px;align-items:center">
+        <input type="text" id="saveDir" readonly style="flex:1">
+        <button class="btn btn-small" id="btnPickDir">更改...</button>
+      </div>
+    </div>
+
+    <div class="form-row">
+      <label>文件格式</label>
+      <select id="saveFormat">
+        <option value="">与原文件相同</option>
+        <option value="mc4">MC4（加密）</option>
+        <option value="shn">SHN（XML）</option>
+        <option value="json">JSON</option>
+      </select>
+      <div class="ed-hint" id="saveFormatHint"></div>
+    </div>
+
+    <div class="form-row">
+      <label>署名信息</label>
+      <select id="saveSigMode">
+        <option value="entry">作为独立条目追加（推荐）</option>
+        <option value="suffix">附加到每个条目名称后</option>
+        <option value="none">不写入署名</option>
+      </select>
+      <div class="ed-hint" id="saveSigPreview"></div>
+    </div>
+
+    <div class="modal-actions">
+      <button id="btnSaveCancel" class="btn">取消</button>
+      <button id="btnSaveOk" class="btn btn-primary">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- 全文查看对话框 -->
+<div id="fullModal" class="modal hidden">
+  <div class="modal-box wide">
+    <h3>文件全文内容</h3>
+    <div class="ed-hint" id="fullMeta" style="margin-bottom:10px"></div>
+    <div class="full-actions">
+      <button class="btn btn-small" id="btnFullWrap">自动换行：开</button>
+      <button class="btn btn-small" id="btnFullCopy">复制全文</button>
+      <span style="flex:1"></span>
+      <span class="ed-hint" id="fullSize"></span>
+    </div>
+    <pre id="fullText" class="full-text"></pre>
+    <div class="modal-actions">
+      <button id="btnFullClose" class="btn btn-primary">关闭</button>
     </div>
   </div>
 </div>

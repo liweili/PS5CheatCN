@@ -25,6 +25,8 @@ document.addEventListener('DOMContentLoaded', () => {
   bindEdit();
   bindSettings();
   bindConvert();
+  bindFullText();
+  bindSaveDialog();
   bindMenu();
   bindDragDrop();
   loadSettings();
@@ -34,8 +36,10 @@ document.addEventListener('DOMContentLoaded', () => {
 // ---------------------------------------------------------------- 工具栏
 function bindToolbar() {
   $('btnOpen').onclick = doOpen;
-  $('btnSave').onclick = () => doSave(false);
-  $('btnSaveAs').onclick = () => doSave(true);
+  $('btnSave').onclick = () => openSaveDialog();
+  $('btnSaveAs').onclick = () => openSaveDialog();
+  $('btnConvert').onclick = openConvertDialog;
+  $('btnViewFull').onclick = openFullTextDialog;
   $('btnTranslateAll').onclick = doTranslateAll;
   $('btnRevertAll').onclick = doRevertAll;
   $('btnSettings').onclick = () => $('settingsModal').classList.remove('hidden');
@@ -46,6 +50,8 @@ function setEnabled(on) {
   $('btnSaveAs').disabled = !on;
   $('btnTranslateAll').disabled = !on;
   $('btnRevertAll').disabled = !on;
+  $('btnConvert').disabled = !on;
+  $('btnViewFull').disabled = !on;
   $('searchBox').disabled = !on;
   $('onlyUntranslated').disabled = !on;
 }
@@ -333,14 +339,68 @@ function doRevertAll() {
 }
 
 // ---------------------------------------------------------------- 保存
-async function doSave(saveAs) {
+
+/**
+ * 打开保存对话框。
+ * 需求：默认沿用原格式，文件名加 _CN 后缀（可改），格式可切换。
+ */
+function openSaveDialog(forceFormat) {
   if (!state.filePath) return;
 
-  // 打包模型
+  const base = (state.filePath || 'cheat').split(/[\\/]/).pop();
+  let noExt = base.replace(/\.(mc4|shn|json)$/i, '');
+  const srcExt = state.sourceFormat || 'json';
+
+  // 默认格式：与原文件相同（转换按钮传入的 forceFormat 优先）
+  const defFmt = forceFormat || srcExt;
+
+  // 默认文件名：原名 + _CN + 新扩展名。
+  // 已经带 _CN 的不再重复加（避免 _CN_CN）
+  if (!/_CN$/i.test(noExt)) noExt = noExt + '_CN';
+  const defName = `${noExt}.${defFmt}`;
+
+  $('saveFileName').value = defName;
+  $('saveDir').value = (state.filePath || '').replace(/[\\/][^\\/]*$/, '');
+  $('saveFormat').value = defFmt === srcExt ? '' : defFmt;
+  $('saveSigMode').value = state.settings.signatureMode;
+
+  updateSaveHints();
+  $('saveModal').classList.remove('hidden');
+}
+
+/** 更新保存对话框里的提示信息 */
+function updateSaveHints() {
+  const fmt = $('saveFormat').value || state.sourceFormat;
+  const names = { mc4: 'MC4（加密）', shn: 'SHN（XML）', json: 'JSON' };
+  const srcFmt = state.sourceFormat;
+
+  $('saveFormatHint').textContent = fmt === srcFmt
+    ? `保持与原文件相同的 ${names[fmt]} 格式`
+    : `将从 ${names[srcFmt]} 转换为 ${names[fmt]}（转换会重新生成文件结构）`;
+
+  const mode = $('saveSigMode').value;
+  if (mode === 'none') {
+    $('saveSigPreview').textContent = '保存时不写入任何署名信息';
+  } else {
+    $('saveSigPreview').textContent = '署名：' + buildSignature();
+  }
+}
+
+/** 执行保存（使用保存对话框里的设置） */
+async function doSaveWithDialog() {
+  const fileName = ($('saveFileName').value || '').trim();
+  if (!fileName) {
+    setStatus('文件名不能为空', true);
+    return;
+  }
+  const dir = $('saveDir').value || '';
+  const target = dir ? dir + '\\' + fileName : fileName;
+  const targetFormat = $('saveFormat').value || state.sourceFormat;
+
   const payload = {
-    filePath: state.filePath,
+    filePath: target,
     sourceFormat: state.sourceFormat,
-    defaultName: defaultSaveName(),
+    defaultName: fileName,
     model: {
       format: state.sourceFormat,
       sourceFormat: state.sourceFormat,
@@ -355,32 +415,23 @@ async function doSave(saveAs) {
     },
     opts: {
       signature: buildSignature(),
-      signatureMode: state.settings.signatureMode,
-      targetFormat: state.settings.targetFormat,
+      signatureMode: $('saveSigMode').value,
+      targetFormat,
     },
   };
 
-  let res;
-  if (saveAs) res = await window.api.saveAs(payload);
-  else res = await window.api.save(payload);
-
+  const res = await window.api.saveTo(payload);
   if (res.canceled) return;
   if (res.error) {
     setStatus('保存失败：' + res.error, true);
     return;
   }
+  $('saveModal').classList.add('hidden');
   state.filePath = res.filePath;
   state.dirty = false;
   $('fileInfo').textContent = res.filePath;
   $('fileInfo').title = res.filePath;
   setStatus('已保存到 ' + res.filePath);
-}
-
-function defaultSaveName() {
-  const base = (state.filePath || 'cheat').split(/[\\/]/).pop();
-  const noExt = base.replace(/\.(mc4|shn|json)$/i, '');
-  const ext = state.settings.targetFormat || state.sourceFormat;
-  return `${noExt}.${ext}`;
 }
 
 /** 生成署名文本 */
@@ -444,6 +495,24 @@ function saveSettings() {
   } catch (e) { /* ignore */ }
 }
 
+// ---------------------------------------------------------------- 保存对话框
+function bindSaveDialog() {
+  $('btnSaveCancel').onclick = () => $('saveModal').classList.add('hidden');
+  $('btnSaveOk').onclick = doSaveWithDialog;
+  $('btnPickDir').onclick = async () => {
+    const res = await window.api.pickDir();
+    if (res && res.dir) $('saveDir').value = res.dir;
+  };
+  $('saveFormat').onchange = updateSaveHints;
+  $('saveSigMode').onchange = updateSaveHints;
+  // 文件名随格式联动扩展名
+  $('saveFileName').oninput = () => {
+    const fmt = $('saveFormat').value || state.sourceFormat;
+    const base = ($('saveFileName').value || '').replace(/\.(mc4|shn|json)$/i, '');
+    $('saveFileName').value = base + '.' + fmt;
+  };
+}
+
 // ---------------------------------------------------------------- 格式转换
 function bindConvert() {
   let target = 'json';
@@ -457,13 +526,62 @@ function bindConvert() {
   });
 
   $('btnConvCancel').onclick = () => $('convertModal').classList.add('hidden');
-  $('btnConvOk').onclick = async () => {
+  $('btnConvOk').onclick = () => {
     $('convertModal').classList.add('hidden');
-    state.settings.targetFormat = target;
-    saveSettings();
-    $('setTarget').value = target;
-    await doSave(true);
+    // 直接打开保存对话框，并预填目标格式
+    openSaveDialog(target);
   };
+}
+
+/**
+ * 「转换格式」按钮：先选目标格式，再进保存对话框。
+ */
+function openConvertDialog() {
+  if (!state.filePath) return;
+  const srcFmt = state.sourceFormat;
+  const cards = Array.from(document.querySelectorAll('.convert-card'));
+  // 先全部取消高亮，再只选中一个与原格式不同的格式
+  cards.forEach((c) => c.classList.remove('active'));
+  const firstDiff = cards.find((c) => c.dataset.fmt !== srcFmt);
+  if (firstDiff) firstDiff.classList.add('active');
+  $('convertModal').classList.remove('hidden');
+}
+
+// ---------------------------------------------------------------- 全文查看
+function bindFullText() {
+  $('btnFullClose').onclick = () => $('fullModal').classList.add('hidden');
+  $('btnFullWrap').onclick = () => {
+    const el = $('fullText');
+    el.classList.toggle('wrap');
+    $('btnFullWrap').textContent = '自动换行：' + (el.classList.contains('wrap') ? '开' : '关');
+  };
+  $('btnFullCopy').onclick = async () => {
+    const text = $('fullText').textContent;
+    try {
+      await navigator.clipboard.writeText(text);
+      setStatus('全文已复制到剪贴板');
+    } catch (e) {
+      setStatus('复制失败，请手动选择复制', true);
+    }
+  };
+}
+
+/**
+ * 查看文件全文。
+ * MC4 会先解密成 XML 再显示，方便核对内容。
+ */
+async function openFullTextDialog() {
+  if (!state.filePath) return;
+  const res = await window.api.getFullText(state.filePath);
+  if (res.error) {
+    setStatus('读取全文失败：' + res.error, true);
+    return;
+  }
+  $('fullText').textContent = res.text;
+  const fmtName = { mc4: 'MC4（已解密显示）', shn: 'SHN（XML）', json: 'JSON' }[res.format] || res.format;
+  $('fullMeta').textContent = `格式：${fmtName}    路径：${state.filePath}`;
+  $('fullSize').textContent = `${res.text.length.toLocaleString()} 字符 · ${res.bytes.toLocaleString()} 字节`;
+  $('fullModal').classList.remove('hidden');
 }
 
 // ---------------------------------------------------------------- 菜单
@@ -471,8 +589,8 @@ function bindMenu() {
   window.api.onMenu((action) => {
     switch (action) {
       case 'open': doOpen(); break;
-      case 'save': if (state.filePath) doSave(false); break;
-      case 'saveAs': if (state.filePath) doSave(true); break;
+      case 'save': if (state.filePath) openSaveDialog(); break;
+      case 'saveAs': if (state.filePath) openSaveDialog(); break;
       case 'translateAll': if (state.mods.length) doTranslateAll(); break;
       case 'revertAll': if (state.mods.length) doRevertAll(); break;
       case 'settings': $('settingsModal').classList.remove('hidden'); break;

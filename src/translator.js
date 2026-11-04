@@ -1,4 +1,7 @@
 'use strict';
+const { GAME_TERMS, TERM_NOTES } = require('./game-terms');
+const { cleanText, detectGarbage } = require('./text-cleaner');
+
 /**
  * 金手指名称自动汉化引擎
  *
@@ -111,19 +114,19 @@ const PHRASES = {
   'max inf canteen': '无限满水壶',
   'max inf fuel': '无限满燃料',
   'max inf scraps': '无限满废料',
-  'max special combo': '满必杀连段',
-  'max combo': '满连段',
+  'max special combo': '满必杀连招',
+  'max combo': '最高连招数',
   'max money on pick': '拾取时满金钱',
   'max access cards': '通行证全满',
   'max arsenal keys': '军械库钥匙全满',
   'max scraps and canteen': '废料与水壶全满',
   'max batmobile health': '蝙蝠车满血',
   'max batmobile armour': '蝙蝠车满装甲',
-  'hit for max special combo': '命中触发满必杀连段',
+  'hit for max special combo': '命中触发满必杀连招',
   'super': '超级',
   'super meter': '超能槽',
-  'special combo': '必杀连段',
-  'combo': '连段',
+  'special combo': '必杀连招',
+  'combo': '连招',
 
   // —— 金币 / 货币 / 分数 ——
   'money': '金钱',
@@ -524,7 +527,7 @@ const WORDS = {
   meter: '能量槽',
   gauge: '能量槽',
   supermeter: '超能槽',
-  combo: '连段',
+  combo: '连招',
   special: '必杀',
   fury: '怒火',
   canteen: '水壶',
@@ -612,12 +615,12 @@ const EXACT = {
   'infinite ammo and grenade usage': '无限弹药与手雷',
   'max level true hero': '真英雄满级',
   'max level infamous': '立场满级',
-  'max combo (mc)': '满连段（主代码）',
+  'max combo (mc)': '最高连招数（主代码）',
   'max money on pick': '拾取时满金钱',
   'max xp on get': '获取时经验全满',
   'max resources on get': '获取时资源全满',
   'max skillpoints': '技能点全满',
-  'max special combo': '满必杀连段',
+  'max special combo': '满必杀连招',
   'freeze timer': '冻结计时器',
   'freeze countdown timer': '冻结倒计时',
   'change timer to 999': '计时器改为999',
@@ -633,7 +636,7 @@ const EXACT = {
   'instant quicktime events': '瞬间跳过演出',
   '1 hit kill (disable inf skillpoints)': '一击必杀（需先禁用无限技能点）',
   'inf skillpoints (disable 1 hit before using)': '无限技能点（使用前先禁用一击必杀）',
-  'hit for max special combo': '命中触发满必杀连段',
+  'hit for max special combo': '命中触发满必杀连招',
   'infinite health (enable mc)': '无限生命值（需开启主代码）',
   'infinite health/1 hit kill (master code/must be on)': '无限生命/一击必杀（主代码须开启）',
   'infinite health/1 hit kill/drone (mastercode/must be on)': '无限生命/一击必杀/无人机（主代码须开启）',
@@ -1147,8 +1150,8 @@ const VARIANTS = {
   'finisher': '终结技',
   'ultimate': '终极技能',
   'super move': '超必杀',
-  'combo counter': '连段计数',
-  'combo meter': '连段槽',
+  'combo counter': '连招计数',
+  'combo meter': '连招槽',
   'rage meter': '怒气槽',
   'super meter': '超能槽',
   'health bar': '生命槽',
@@ -1292,32 +1295,70 @@ const PROTECT = /(\[[^\]]*\]|\([^)]*\)|\{[^}]*\}|<[^>]*>|\b[A-Z0-9]{1,4}\b|\d+(?
 function translate(src) {
   const original = String(src == null ? '' : src);
   if (!original.trim()) return { text: original, hit: false, reason: '空' };
-  if (hasCJK(original)) return { text: original, hit: false, reason: '已含中文' };
 
-  const key = norm(original);
+  // 0) 先修正乱码与异常符号，再翻译。
+  //    编码损坏的原文（如 "Infinite Stamina HP? ?????"）清理后变成
+  //    "Infinite Stamina HP"，才能被正常翻译。
+  const cleaned = cleanText(original);
+  const garbage = detectGarbage(original);
+  const work = cleaned.text;
+  const garbageNote = garbage.length ? '（已修正乱码：' + garbage.join('、') + '）' : '';
+
+  if (hasCJK(work)) {
+    // 已含中文：只做清理，不重译
+    if (cleaned.changed) {
+      return { text: work, hit: true, reason: '仅修正乱码' + garbageNote };
+    }
+    return { text: work, hit: false, reason: '已含中文' };
+  }
+
+  const key = norm(work);
+
+  // 0) 游戏专用术语表（优先级最高，避免被通用词库覆盖）
+  //    例如 Combo 必须译「连招」而不是通用词库里的「连段」
+  if (GAME_TERMS[key] !== undefined) {
+    return { text: GAME_TERMS[key], hit: true, reason: '游戏术语' };
+  }
+  // 复数归一化：Combos → Combo，Bullets → Bullet
+  const singular = key.replace(/(?<![a-z])s$/, '');
+  if (singular !== key) {
+    if (GAME_TERMS[singular] !== undefined) {
+      return { text: GAME_TERMS[singular], hit: true, reason: '游戏术语(复数)' };
+    }
+    if (PHRASES[singular] !== undefined) {
+      return { text: PHRASES[singular], hit: true, reason: '短语匹配(复数)' };
+    }
+  }
 
   // 1) 整句精确
   if (EXACT[key] !== undefined) {
-    return { text: EXACT[key], hit: true, reason: '整句匹配' };
+    return { text: EXACT[key], hit: true, reason: '整句匹配' + garbageNote };
   }
 
-  // 1) 括号内拼音 + 乱码清理
-  //    原作者常写成 "ML Budget 999,999,900,000 (xin zi)???? ??"，
+  // 1) 括号内拼音提示还原
+  //    原作者常写成 "ML Budget 999,999,900,000 (xin zi)"，
   //    中文因编码损坏变成 ?，但拼音提示能反推含义。
-  const cleaned = cleanPinyinHints(original);
-  if (cleaned) {
-    // 清洗后的文本整体可能仍译不出（如 "ML Budget 999,999,900,000 (资金)"），
+  const pinyin = cleanPinyinHints(work);
+  if (pinyin) {
+    // 还原后的文本整体可能仍译不出（如 "ML Budget 999,999,900,000 (资金)"），
     // 这时用片段替换把能译的部分译出来，保留其余原文。
-    const cn = translate(cleaned.text);
-    if (cn.hit) return { text: cn.text, hit: true, reason: cn.reason + '+拼音清理' };
-    const seg = translateFragment(cleaned.text);
-    if (seg.hit) return { text: seg.text, hit: true, reason: '片段替换+拼音清理' };
+    const cn = translate(pinyin.text);
+    if (cn.hit) return { text: cn.text, hit: true, reason: cn.reason + '+拼音还原' + garbageNote };
+    const seg = translateFragment(pinyin.text);
+    if (seg.hit) return { text: seg.text, hit: true, reason: '片段替换+拼音还原' + garbageNote };
   }
 
   // 1.5) 前缀规则：Inf XXX / Inf-XXX / Inf.XXX / No XXX 等
   //      数据来源：HEN 集合中 2239 条以 Inf 开头，实际形态高度规整
-  const pre = applyPrefixRules(original);
-  if (pre) return { text: pre, hit: true, reason: '前缀规则' };
+  const pre = applyPrefixRules(work);
+  if (pre) return { text: pre, hit: true, reason: '前缀规则' + garbageNote };
+
+  // 1.6) 整体复数归一化后再试前缀规则（Inf Combos → Inf Combo → 无限连招）
+  const keySing = key.replace(/(?<![a-z])s$/, '');
+  if (keySing !== key) {
+    const pre2 = applyPrefixRules(keySing);
+    if (pre2) return { text: pre2, hit: true, reason: '前缀规则(复数)' + garbageNote };
+  }
 
   // 2) 短语库 / 变体库：整串就是一个已知短语
   if (PHRASES[key] !== undefined) {
@@ -1329,7 +1370,7 @@ function translate(src) {
 
   // 3) 组合式：按分隔符切成片段，逐段替换
   //    例："Infinite Ammo / Infinite Grenades" → "无限弹药 / 无限手雷"
-  const parts = original.split(/\s*(\/|\||,|;|\+|\band\b|\bAnd\b)\s*/);
+  const parts = work.split(/\s*(\/|\||,|;|\+|\band\b|\bAnd\b)\s*/);
   let allHit = true;
   let anyHit = false;
   const outParts = parts.map((seg, i) => {
@@ -1353,6 +1394,7 @@ function translate(src) {
     }
     if (PHRASES[k] !== undefined) { anyHit = true; return PHRASES[k]; }
     if (VARIANTS[k] !== undefined) { anyHit = true; return VARIANTS[k]; }
+    if (GAME_TERMS[k] !== undefined) { anyHit = true; return GAME_TERMS[k]; }
     // 片段级前缀规则（如 "Inf Ammo" / "Max Money"）
     const preFrag = applyPrefixRules(seg);
     if (preFrag) { anyHit = true; return preFrag; }
@@ -1392,7 +1434,12 @@ function translate(src) {
     return { text: tidy(outParts.join('')), hit: true, reason: '部分替换' };
   }
 
-  return { text: original, hit: false, reason: '未识别' };
+  // 未识别：返回清理后的文本（乱码已修正，英文保留供人工翻译）
+  return {
+    text: work,
+    hit: cleaned.changed,
+    reason: cleaned.changed ? '仅修正乱码' + garbageNote : '未识别',
+  };
 }
 
 /**
@@ -1456,6 +1503,14 @@ function applyPrefixRules(src) {
     if (PHRASES[rk] !== undefined) return '无限' + PHRASES[rk];
     if (VARIANTS[rk] !== undefined) return '无限' + VARIANTS[rk];
     if (EXACT[rk] !== undefined) return '无限' + EXACT[rk];
+    if (GAME_TERMS[rk] !== undefined) return '无限' + GAME_TERMS[rk];
+    // 复数归一化（Combos → Combo）
+    const rSing = rk.replace(/(?<![a-z])s$/, '');
+    if (rSing !== rk) {
+      if (PHRASES[rSing] !== undefined) return '无限' + PHRASES[rSing];
+      if (GAME_TERMS[rSing] !== undefined) return '无限' + GAME_TERMS[rSing];
+      if (VARIANTS[rSing] !== undefined) return '无限' + VARIANTS[rSing];
+    }
     // 主体里含连字符分段，逐段译
     const segs = rest.split(/[-\s]+/).filter(Boolean);
     if (segs.length > 1) {
@@ -1610,13 +1665,16 @@ function translateFragment(seg) {
   let result = masked;
   // 先应用多词短语（PHRASES / VARIANTS），再应用单词级替换。
   // 否则 "Max Money" 会被拆成 max→最大 + money→金钱，得到「最大金钱」而不是「满金钱」。
-  const phraseKeys = Object.keys(PHRASES)
+  // 游戏术语表优先于通用词库（Combo 必须译「连招」）
+  const phraseKeys = Object.keys(GAME_TERMS)
+    .concat(Object.keys(PHRASES))
     .concat(Object.keys(VARIANTS))
     .filter((k) => k.indexOf(' ') > 0)
     .sort((a, b) => b.length - a.length);
 
   for (const ph of phraseKeys) {
-    const cn = PHRASES[ph] !== undefined ? PHRASES[ph] : VARIANTS[ph];
+    const cn = GAME_TERMS[ph] !== undefined ? GAME_TERMS[ph]
+             : (PHRASES[ph] !== undefined ? PHRASES[ph] : VARIANTS[ph]);
     if (!cn) continue;
     const re = new RegExp('(^|[^a-z])(' + ph.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')([^a-z]|$)', 'gi');
     result = result.replace(re, (m0, pre, word, post) => {

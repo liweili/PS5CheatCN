@@ -286,6 +286,37 @@ body { display: flex; flex-direction: column; }
 .conv-name { font-weight: 600; margin-bottom: 5px; font-size: 13px; }
 .conv-desc { font-size: 11px; color: var(--text-mute); line-height: 1.6; }
 
+/* ---------------- 保存 / 全文 模态框补充 ---------------- */
+.modal-box.wide { min-width: 720px; max-width: 1000px; width: 78vw; }
+
+.full-actions {
+  display: flex; align-items: center; gap: 8px; margin-bottom: 8px;
+}
+
+.full-text {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px;
+  max-height: 58vh;
+  overflow: auto;
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.55;
+  color: #c8d4e0;
+  white-space: pre;
+  user-select: text;
+  -webkit-user-select: text;
+}
+.full-text.wrap { white-space: pre-wrap; word-break: break-all; }
+
+#saveFileName, #saveDir { font-family: var(--mono); font-size: 12px; }
+
+.form-row code {
+  background: var(--bg-3); padding: 1px 5px; border-radius: 3px;
+  font-family: var(--mono); font-size: 11px; color: var(--accent);
+}
+
 /* ---------------- 滚动条 ---------------- */
 ::-webkit-scrollbar { width: 10px; height: 10px; }
 ::-webkit-scrollbar-track { background: var(--bg); }

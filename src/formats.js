@@ -354,14 +354,29 @@ function writeJson(model, originalText) {
  * 将统一模型转换为目标格式并序列化
  * @param {string} target 'json' | 'shn' | 'mc4'
  */
-function convertModel(model, target) {
+function convertModel(model, target, opts = {}) {
+  const signature = opts.signature || '';
+  const signatureMode = opts.signatureMode || 'none';
+
+  // 署名条目/后缀：跨格式转换时同样要写入，保持与同格式保存一致
+  let mods = model.mods.map((m) => ({ ...m }));
+  if (signature && signatureMode === 'suffix') {
+    mods = mods.map((m) => ({ ...m, name: m.name + ' ' + signature }));
+  }
+
   if (target === 'json') {
+    const credits = model.meta.author
+      ? String(model.meta.author).split(/[,;]/).map((s) => s.trim()).filter(Boolean)
+      : [];
+    if (signature && signatureMode === 'entry' && !credits.includes(signature)) {
+      credits.push(signature);
+    }
     const obj = {
       name: model.meta.game || '',
       id: model.meta.cusa || '',
       version: model.meta.version || '',
       process: model.meta.process || '',
-      mods: model.mods.map((m) => ({
+      mods: mods.map((m) => ({
         name: m.name,
         type: m.type || 'checkbox',
         memory: m.lines.map((l) => ({
@@ -370,9 +385,7 @@ function convertModel(model, target) {
           off: fmtHex(l.off, false),
         })),
       })),
-      credits: model.meta.author
-        ? String(model.meta.author).split(/[,;]/).map((s) => s.trim()).filter(Boolean)
-        : [],
+      credits,
     };
     return JSON.stringify(obj, null, 2) + '\n';
   }
@@ -386,7 +399,7 @@ function convertModel(model, target) {
     `Process="${escXml(model.meta.process || '')}"`,
   ].join(' ');
   const genres = (model.meta.genres || []).map((g) => `  <Genres Name="${escXml(g)}" />`).join('\r\n');
-  const cheats = model.mods.map((m) => {
+  const cheats = mods.map((m) => {
     const lines = m.lines.map((l) => [
       '    <Cheatline>',
       `      <Offset>${escXml(l.offset)}</Offset>`,
@@ -399,7 +412,12 @@ function convertModel(model, target) {
     return `  <Cheat Text="${escXml(m.name)}">${body}</Cheat>`;
   }).join('\r\n');
 
-  const xml = `<?xml version="1.0" encoding="utf-8"?>\r\n<Trainer xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" ${attrs}>\r\n${genres}\r\n  <Items />\r\n${cheats}\r\n</Trainer>\r\n`;
+  let xml = `<?xml version="1.0" encoding="utf-8"?>\r\n<Trainer xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" ${attrs}>\r\n${genres}\r\n  <Items />\r\n${cheats}\r\n</Trainer>\r\n`;
+
+  // 署名作为独立条目追加
+  if (signature && signatureMode === 'entry') {
+    xml = appendShnSignature(xml, signature);
+  }
 
   if (target === 'mc4') {
     return mc4Encrypt(padTo16(xml));

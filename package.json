@@ -1,13 +1,13 @@
 {
   "name": "ps5-cheat-cn",
   "productName": "PS5金手指自动汉化工具",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "PS5/PS4 金手指自动汉化工具，支持 MC4 / SHN / JSON",
   "main": "main.js",
   "author": "L.wl",
   "scripts": {
     "start": "electron .",
-    "test": "node test-core.js && node test-gui.js",
+    "test": "node test-core.js && node test-features.js && node test-gui.js",
     "dist": "electron-builder --win nsis zip --x64",
     "icon": "electron render-icon.js --no-sandbox && node build-ico.js build/icon.png build/icon.ico"
   },
@@ -28,7 +28,8 @@
       "index.html",
       "style.css",
       "renderer.js",
-      "src/**/*"
+      "src/**/*",
+      "使用说明.md"
     ],
     "win": {
       "target": [
@@ -74,12 +75,6 @@
       "uninstallerIcon": "build/icon.ico",
       "installerHeaderIcon": "build/icon.ico",
       "allowElevation": false
-    },
-    "extraResources": [
-      {
-        "from": "使用说明.md",
-        "to": "使用说明.md"
-      }
-    ]
+    }
   }
 }

@@ -72,7 +72,10 @@ function buildMenu() {
 app.whenReady().then(() => {
   buildMenu();
   createWindow();
-  copyReadmeToAppDir();
+
+  // 延迟到窗口创建后再搬运说明文档：
+  // whenReady 阶段 app.getPath('exe') 尚未完全就绪，早调用会拿到错误路径。
+  setTimeout(copyReadmeToAppDir, 1500);
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
@@ -85,12 +88,28 @@ app.whenReady().then(() => {
  */
 function copyReadmeToAppDir() {
   try {
-    const src = path.join(process.resourcesPath, '使用说明.md');
     const dst = path.join(path.dirname(app.getPath('exe')), '使用说明.md');
-    if (!fs.existsSync(src)) return;
     if (fs.existsSync(dst)) return;
-    fs.copyFileSync(src, dst);
-  } catch (e) { /* 复制失败不影响程序运行 */ }
+
+    // 说明文档打包在 asar 内（app.asar/使用说明.md）
+    // 注意：Electron 的 asar 虚拟文件系统对「resourcesPath + app.asar + 相对路径」
+    // 这种绝对拼接是支持的（已实测），但对纯相对 'app.asar/xxx' 不支持。
+    const inAsar = path.join(process.resourcesPath, 'app.asar', '使用说明.md');
+    if (fs.existsSync(inAsar)) {
+      const content = fs.readFileSync(inAsar);
+      fs.writeFileSync(dst, content);
+      return;
+    }
+    // 兼容：也尝试 resources 目录下的独立文件
+    const loose = path.join(process.resourcesPath, '使用说明.md');
+    if (fs.existsSync(loose)) {
+      fs.copyFileSync(loose, dst);
+    }
+  } catch (e) {
+    console.error('复制使用说明失败:', e.message);
+    // 失败时重试一次（可能是 asar 尚未挂载完成）
+    setTimeout(copyReadmeToAppDir, 2000);
+  }
 }
 
 app.on('window-all-closed', () => {
@@ -185,6 +204,56 @@ ipcMain.handle('tr:one', async (evt, name) => {
 /** 批量翻译 */
 ipcMain.handle('tr:batch', async (evt, names) => {
   return names.map((n) => T.translate(n));
+});
+
+/**
+ * 保存到指定路径（保存对话框用）。
+ * 与 file:saveAs 的区别：不弹系统对话框，路径由渲染层指定。
+ */
+ipcMain.handle('file:saveTo', async (evt, payload) => {
+  const { filePath, model, opts } = payload;
+  try {
+    const m = reviveModel(model);
+    const targetFormat = (opts && opts.targetFormat) || m.sourceFormat;
+    let text;
+    if (targetFormat !== m.sourceFormat) {
+      // 跨格式转换：重新生成整个文件（同样写入署名）
+      text = F.convertModel(m, targetFormat, opts || {});
+    } else {
+      // 同格式：定点替换，保留原文件其余内容
+      text = F.serialize(m, opts || {}).text;
+    }
+    fs.writeFileSync(filePath, text, 'utf8');
+    return { ok: true, filePath };
+  } catch (e) {
+    return { ok: false, error: e.message };
+  }
+});
+
+/** 读取文件全文（MC4 会被解密成 XML 显示） */
+ipcMain.handle('file:getFullText', async (evt, filePath) => {
+  try {
+    const raw = fs.readFileSync(filePath, 'utf8');
+    const fmt = F.detectFormat(filePath, raw);
+    let text = raw;
+    if (fmt === 'mc4') {
+      // MC4 显示解密后的 XML（去掉尾部 padding 空白）
+      text = F.mc4Decrypt(raw).replace(/\s+$/, '');
+    }
+    return { ok: true, text, format: fmt, bytes: Buffer.byteLength(text, 'utf8') };
+  } catch (e) {
+    return { ok: false, error: e.message };
+  }
+});
+
+/** 选择保存目录 */
+ipcMain.handle('file:pickDir', async (evt) => {
+  const res = await dialog.showOpenDialog(win, {
+    title: '选择保存位置',
+    properties: ['openDirectory', 'createDirectory'],
+  });
+  if (res.canceled || !res.filePaths.length) return { canceled: true };
+  return { dir: res.filePaths[0] };
 });
 
 /** 打开文件夹 */
