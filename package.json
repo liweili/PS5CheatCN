@@ -76,6 +76,12 @@
       "installerHeaderIcon": "build/icon.ico",
       "allowElevation": false,
       "artifactName": "PS5CheatCN-Setup-${version}-${arch}.${ext}"
-    }
+    },
+    "extraResources": [
+      {
+        "from": "使用说明.md",
+        "to": "使用说明.md"
+      }
+    ]
   }
 }

@@ -92,18 +92,23 @@ function copyReadmeToAppDir() {
     if (fs.existsSync(dst)) return;
 
     // 说明文档打包在 asar 内（app.asar/使用说明.md）
-    // 注意：Electron 的 asar 虚拟文件系统对「resourcesPath + app.asar + 相对路径」
-    // 这种绝对拼接是支持的（已实测），但对纯相对 'app.asar/xxx' 不支持。
-    const inAsar = path.join(process.resourcesPath, 'app.asar', '使用说明.md');
-    if (fs.existsSync(inAsar)) {
-      const content = fs.readFileSync(inAsar);
-      fs.writeFileSync(dst, content);
-      return;
-    }
-    // 兼容：也尝试 resources 目录下的独立文件
-    const loose = path.join(process.resourcesPath, '使用说明.md');
-    if (fs.existsSync(loose)) {
-      fs.copyFileSync(loose, dst);
+    //
+    // 关键坑：Electron 的 asar 虚拟文件系统对 existsSync 的判定与
+    // readFileSync 不一致 —— existsSync 对「resourcesPath + app.asar + 相对路径」
+    // 可能返回 false，但 readFileSync 却能正常读到内容。
+    // 所以这里不用 existsSync 判断，直接尝试读取，读到就写。
+    const candidates = [
+      path.join(process.resourcesPath, 'app.asar', '使用说明.md'),
+      path.join(process.resourcesPath, '使用说明.md'),
+    ];
+    for (const src of candidates) {
+      try {
+        const content = fs.readFileSync(src);
+        if (content && content.length) {
+          fs.writeFileSync(dst, content);
+          return;
+        }
+      } catch (e) { /* 换下一个候选路径 */ }
     }
   } catch (e) {
     console.error('复制使用说明失败:', e.message);
