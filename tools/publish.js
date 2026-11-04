@@ -137,8 +137,9 @@ async function createRepo(token) {
 // ---------------------------------------------------------------- 推代码
 function pushCode(token) {
   // 本机全局配了 insteadOf 把 github.com 重写到 ghfast.top 镜像。
-  // 镜像只读，push 会失败 —— 这里用 GIT_CONFIG_* 环境变量临时清空该重写，
-  // 直接连真实的 github.com（git 已配 schannel + 关闭吊销检查）。
+  // 镜像虽然能推，但它的 ref 状态有时不同步（报
+  // "cannot lock ref ... but expected ..."），所以这里用
+  // GIT_CONFIG_* 环境变量临时清空该重写，直连真实 GitHub。
   const url = `https://${token}@github.com/${OWNER}/${REPO}.git`;
   console.log('推送代码到 origin ...');
 
