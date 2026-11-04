@@ -249,8 +249,45 @@ function toAsciiAssetName(name) {
   return (ascii || 'asset') + ext;
 }
 
-async function uploadAsset(token, uploadUrl, name, file) {
-  const url = new URL(uploadUrl);
+/**
+ * 只重传附件：产物重新打包后刷新 Release 上的文件，保留 Release 本体
+ * （标题、正文、tag 都不动）。
+ */
+async function uploadAssetsOnly(token, tag) {
+  const rel = await api(token, 'GET', `/repos/${OWNER}/${REPO}/releases/tags/${tag}`);
+  if (rel.status !== 200) {
+    console.error('  ✗ 找不到 Release:', rel.status, rel.json && rel.json.message);
+    return false;
+  }
+  const release = rel.json;
+  console.log(`Release ${release.tag_name} (id ${release.id})`);
+
+  // 先删掉同名旧附件
+  for (const a of release.assets || []) {
+    const del = await api(token, 'DELETE', `/repos/${OWNER}/${REPO}/releases/assets/${a.id}`);
+    console.log(`  删除旧附件 ${a.name} -> ${del.status}`);
+  }
+
+  if (!fs.existsSync(DIST)) {
+    console.error('  ✗ dist 目录不存在，请先运行 npm run dist');
+    return false;
+  }
+  const uploadBase = release.upload_url.replace(/\{[^}]*\}$/, '');
+  const assets = fs.readdirSync(DIST).filter((f) => /\.(exe|zip|blockmap)$/.test(f));
+  let allOk = true;
+  for (const f of assets) {
+    const file = path.join(DIST, f);
+    const size = fs.statSync(file).size;
+    const assetName = toAsciiAssetName(f);
+    process.stdout.write(`  上传 ${assetName} (${(size / 1048576).toFixed(1)}MB) ... `);
+    const ok = await uploadAsset(token, uploadBase, assetName, file);
+    console.log(ok ? '✓' : '✗');
+    if (!ok) allOk = false;
+  }
+  return allOk;
+}
+
+async function uploadAsset(token, uploadUrl, name, file) {  const url = new URL(uploadUrl);
   const stat = fs.statSync(file);
   const opts = await requestOptions(url.hostname, {
     path: url.pathname + '?name=' + encodeURIComponent(name),
@@ -289,7 +326,7 @@ async function uploadAsset(token, uploadUrl, name, file) {
 async function main() {
   const [cmd, token, arg] = process.argv.slice(2);
   if (!cmd || !token) {
-    console.log('用法: node tools/publish.js <create-repo|push|release|all> <token> [tag]');
+    console.log('用法: node tools/publish.js <create-repo|push|release|assets|all> <token> [tag]');
     process.exit(1);
   }
   try {
@@ -305,6 +342,10 @@ async function main() {
       if (!await createRepo(token)) process.exit(1);
       if (!pushCode(token)) process.exit(1);
       process.exit(await createRelease(token, arg) ? 0 : 1);
+    } else if (cmd === 'assets') {
+      // 只重传附件（不动 Release 本体），用于产物重新打包后刷新
+      if (!arg) { console.error('请指定 tag，例如 v1.1.0'); process.exit(1); }
+      process.exit(await uploadAssetsOnly(token, arg) ? 0 : 1);
     } else {
       console.error('未知命令:', cmd);
       process.exit(1);
