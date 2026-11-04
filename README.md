@@ -44,25 +44,40 @@
 
 ## 📥 安装
 
-**下载** [Releases](https://github.com/L-wl/PS5CheatCN/releases) 页面里的 `PS5金手指自动汉化工具-x.x.x-x64.exe`
+**下载** [Releases](https://github.com/liweili/PS5CheatCN/releases) 页面：
 
-**安装**：双击安装包 → 按提示选择安装位置（默认 `%LOCALAPPDATA%\Programs\ps5-cheat-cn`）→ 完成
+| 文件 | 说明 |
+|------|------|
+| `PS5CheatCN-Setup-x.x.x-x64.exe` | **安装程序**（推荐）。双击安装，自动创建桌面与开始菜单快捷方式，自带卸载程序 |
+| `PS5CheatCN-x.x.x-x64.zip` | 免安装绿色版，解压即用 |
+
+**安装**：双击 `PS5CheatCN-Setup-*.exe` → 按提示选择安装位置（默认 `%LOCALAPPDATA%\Programs\ps5-cheat-cn`）→ 完成
 
 安装后会自动创建：
-- 桌面快捷方式
+- 桌面快捷方式「PS5金手指自动汉化工具」
 - 开始菜单快捷方式
 - 卸载程序（`控制面板 → 程序和功能` 中可卸载）
 
-**系统要求**：Windows 10 / 11 x64（需要 7-zip 运行时？不需要，Electron 自带）
+> 下载文件名是英文的（`PS5CheatCN-...`），因为 GitHub 会把资源名里的中文剔除掉。
+> 安装完成后的程序名和桌面快捷方式都是中文。
+
+**系统要求**：Windows 10 / 11 x64（无需额外安装 7-zip 等运行时，Electron 自带）
 
 ---
 
 ## 🎯 使用流程
 
-1. **打开** 金手指文件（`.mc4` / `.shn` / `.json`）
+1. **打开** 金手指文件（`.mc4` / `.shn` / `.json`），也可以直接拖进窗口
 2. 点 **「自动汉化全部」**，左侧列表立刻显示中文名
+   （顺手会清掉原文里的乱码问号串、异常符号）
 3. 对翻译不满意的，**直接在右侧改**，回车应用
-4. **保存** —— 写回原文件，格式不变
+4. 点 **「保存」** —— 弹出保存对话框：
+   - 默认**沿用原文件格式**，文件名自动加 `_CN` 后缀（如 `CUSA18740_01.08_CN.mc4`），可改
+   - 想换成别的格式？点工具栏的 **「转换格式」** 按钮
+   - 署名方式可选：独立条目 / 附加到每个名字后 / 不写
+5. 想知道原文长什么样？点 **「查看全文」**，MC4 会自动解密成 XML 显示
+
+> 打开原文件后按 F5 或点「保存」，默认不会覆盖原文件，而是生成 `_CN` 后缀的新文件。
 
 ---
 
@@ -155,11 +170,6 @@ Base64( AES-256-CBC( XML ) )
 
 此外还支持**复数归一化**（`Combos` → `连招`）与**拼音反推**（`(xin zi)` → 资金）。
 
-1. **整句精确匹配** —— `Godmode` → `无敌`
-2. **前缀规则** —— `Inf HP` → `无限生命值`、`Max Money` → `满金钱`
-3. **多词短语替换** —— `Infinite Ammo` → `无限弹药`
-4. **单词级替换** —— 兜底，保留数字与按键符号
-
 词库主体来自对 **HEN-Cheats-Collection 全量 12330 条去重条目**的词频统计（数据驱动，而非凭空编写）。
 
 **实测命中率 81.0%**（9985 / 12330）。未识别的主要是游戏专有名词（如 `Griffa`、`Blue Life Crystal`），
@@ -203,7 +213,7 @@ CheatRunner 面板的 **Sources** 页可直接下载补丁仓库到主机，无�
 ## 🛠️ 从源码构建
 
 ```bash
-git clone https://github.com/L-wl/PS5CheatCN.git
+git clone https://github.com/liweili/PS5CheatCN.git
 cd PS5CheatCN
 npm install
 npm test              # 跑测试

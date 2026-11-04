@@ -58,7 +58,7 @@
     "buildDependenciesFromSource": false,
     "electronDist": "node_modules/electron/dist",
     "electronVersion": "32.3.3",
-    "artifactName": "PS5金手指自动汉化工具-${version}-${arch}.${ext}",
+    "artifactName": "PS5CheatCN-${version}-${arch}.${ext}",
     "forceCodeSigning": false,
     "nsis": {
       "oneClick": false,
@@ -74,7 +74,8 @@
       "installerIcon": "build/icon.ico",
       "uninstallerIcon": "build/icon.ico",
       "installerHeaderIcon": "build/icon.ico",
-      "allowElevation": false
+      "allowElevation": false,
+      "artifactName": "PS5CheatCN-Setup-${version}-${arch}.${ext}"
     }
   }
 }
