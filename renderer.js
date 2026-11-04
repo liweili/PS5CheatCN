@@ -9,7 +9,7 @@ const state = {
   selected: -1,
   dirty: false,
   settings: {
-    signature: '————翻译：L.wl，编辑时间20261104————',
+    signature: '————翻译：{作者}，编辑时间{日期}————',
     signatureMode: 'entry',
     author: 'L.wl',
     targetFormat: '',
@@ -27,6 +27,8 @@ document.addEventListener('DOMContentLoaded', () => {
   bindConvert();
   bindFullText();
   bindSaveDialog();
+  bindBatch();
+  bindAbout();
   bindMenu();
   bindDragDrop();
   loadSettings();
@@ -43,6 +45,8 @@ function bindToolbar() {
   $('btnTranslateAll').onclick = doTranslateAll;
   $('btnRevertAll').onclick = doRevertAll;
   $('btnSettings').onclick = () => $('settingsModal').classList.remove('hidden');
+  $('btnBatch').onclick = openBatchDialog;
+  $('btnAbout').onclick = openAboutDialog;
 }
 
 function setEnabled(on) {
@@ -434,48 +438,107 @@ async function doSaveWithDialog() {
   setStatus('已保存到 ' + res.filePath);
 }
 
-/** 生成署名文本 */
+/**
+ * 署名模板的默认规则。
+ * 用户可在设置里自定义模板，留空时用这个。
+ */
+const DEFAULT_SIG_TEMPLATE = '————翻译：{作者}，编辑时间{日期}————';
+
+/** 取今天的日期字符串 YYYYMMDD */
+function todayStamp() {
+  const d = new Date();
+  return `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;
+}
+
+/**
+ * 生成署名文本。
+ *
+ * 模板支持变量：{作者} {日期} {游戏} {版本}
+ * 留空或未含变量时，退回到默认规则（————翻译：X，编辑时间YYYYMMDD————）
+ */
 function buildSignature() {
   const mode = state.settings.signatureMode;
   if (mode === 'none') return '';
-  const author = (state.settings.author || '').trim();
-  const tmpl = state.settings.signature || '';
-  // 若模板里没有作者和时间，动态填入
-  let sig = tmpl;
-  if (!/[0-9]{8}/.test(sig)) {
-    const d = new Date();
-    const ymd = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;
-    // 模板里若已写「翻译：xxx」，只替换作者名；若为空则整体填充
-    if (/翻译[:：]/.test(sig)) {
-      sig = sig.replace(/(翻译[:：])[^，,：:]*([，,]\s*编辑时间)/, `$1${author}$2`);
-      // 模板形如「————翻译：，编辑时间————」：作者仍为空时补上
-      if (!new RegExp('翻译[:：]' + author).test(sig)) {
-        sig = sig.replace(/(翻译[:：])[^，,：:]*/, `$1${author}`);
-      }
-      // 补日期
-      if (!/[0-9]{8}/.test(sig)) {
-        sig = sig.replace(/(编辑时间)[^，,]*$/, `$1${ymd}`);
-      }
-    } else {
-      // 没有「翻译：」标记，直接套用默认格式
-      sig = `————翻译：${author}，编辑时间${ymd}————`;
+
+  const author = (state.settings.author || '').trim() || '未署名';
+  const game = (state.meta && state.meta.game) || '';
+  const version = (state.meta && state.meta.version) || '';
+  const tmpl = (state.settings.signature || '').trim() || DEFAULT_SIG_TEMPLATE;
+
+  let sig = tmpl
+    .replace(/\{作者\}/g, author)
+    .replace(/\{日期\}/g, todayStamp())
+    .replace(/\{游戏\}/g, game || '未命名游戏')
+    .replace(/\{版本\}/g, version || '-');
+
+  // 模板里既没有变量也没有可识别的日期时，补上默认格式
+  if (!/\{[作者日期游戏版本]\}/.test(tmpl)) {
+    // 老式模板（直接写死作者名和日期）原样保留；
+    // 但像「————翻译：，编辑时间————」这种缺值的要补上
+    if (/翻译[:：][，,]\s*编辑时间/.test(sig)) {
+      sig = sig.replace(/(翻译[:：])[^，,：:]*/, `$1${author}`);
     }
+    if (/编辑时间[^，,]*$/.test(sig) && !/[0-9]{8}/.test(sig)) {
+      sig = sig.replace(/(编辑时间)[^，,]*$/, `$1${todayStamp()}`);
+    }
+    // 模板既不含「翻译/汉化」标记也没有日期 —— 说明是用户自定义的纯文本，
+    // 原样保留即可（不要强行套默认格式）
   }
+
   return sig;
+}
+
+/** 更新设置对话框里的署名预览 */
+function updateSigPreview() {
+  const el = $('sigPreview');
+  if (!el) return;
+  const tmpl = $('setSignature').value;
+  const author = ($('setAuthor').value || '').trim();
+  const mode = $('setSigMode').value;
+
+  // 用输入框里的当前值即时预览（不影响已保存的设置）
+  const saved = state.settings;
+  state.settings = {
+    ...saved,
+    signature: tmpl,
+    author: author,
+    signatureMode: mode,
+  };
+  const text = buildSignature();
+  state.settings = saved;
+
+  el.textContent = mode === 'none' ? '（当前设为不写入署名）' : (text || '（空）');
+  el.classList.toggle('muted', mode === 'none' || !text);
 }
 
 // ---------------------------------------------------------------- 设置
 function bindSettings() {
   $('btnSetCancel').onclick = () => $('settingsModal').classList.add('hidden');
   $('btnSetSave').onclick = () => {
-    state.settings.signature = $('setSignature').value;
+    state.settings.signature = $('setSignature').value.trim();
     state.settings.signatureMode = $('setSigMode').value;
-    state.settings.author = $('setAuthor').value;
+    state.settings.author = $('setAuthor').value.trim();
     state.settings.targetFormat = $('setTarget').value;
     saveSettings();
     $('settingsModal').classList.add('hidden');
     setStatus('设置已保存');
   };
+
+  // 打开设置时刷新预览
+  $('btnSettings').addEventListener('click', updateSigPreview);
+
+  // 输入即更新预览
+  $('setSignature').oninput = updateSigPreview;
+  $('setAuthor').oninput = updateSigPreview;
+  $('setSigMode').onchange = updateSigPreview;
+
+  // 预设模板按钮
+  document.querySelectorAll('[data-sig]').forEach((btn) => {
+    btn.onclick = () => {
+      $('setSignature').value = btn.getAttribute('data-sig');
+      updateSigPreview();
+    };
+  });
 }
 
 function loadSettings() {
@@ -483,10 +546,19 @@ function loadSettings() {
     const s = JSON.parse(localStorage.getItem('ps5cheat-settings') || '{}');
     Object.assign(state.settings, s);
   } catch (e) { /* ignore */ }
+  // 老版本存的是写死的署名（无 {作者} 变量），转成模板形式
+  if (state.settings.signature && !/\{作者\}/.test(state.settings.signature)) {
+    const m = /^—*翻译[:：]([^—，,]*)[—，,]*编辑时间(\d{8})/.exec(state.settings.signature);
+    if (m) {
+      state.settings.signature = DEFAULT_SIG_TEMPLATE;
+      if (!state.settings.author) state.settings.author = m[1].trim();
+    }
+  }
   $('setSignature').value = state.settings.signature;
   $('setSigMode').value = state.settings.signatureMode;
   $('setAuthor').value = state.settings.author;
   $('setTarget').value = state.settings.targetFormat;
+  updateSigPreview();
 }
 
 function saveSettings() {
@@ -511,6 +583,183 @@ function bindSaveDialog() {
     const base = ($('saveFileName').value || '').replace(/\.(mc4|shn|json)$/i, '');
     $('saveFileName').value = base + '.' + fmt;
   };
+}
+
+// ---------------------------------------------------------------- 批量处理
+
+/** 批量处理状态 */
+const batchState = {
+  dir: '',
+  files: [],
+  skipped: [],
+};
+
+function bindBatch() {
+  $('btnBatchPick').onclick = async () => {
+    const res = await window.api.pickDir();
+    if (!res || !res.dir) return;
+    $('batchDir').value = res.dir;
+    await scanBatchDir();
+  };
+
+  $('btnBatchRescan').onclick = () => scanBatchDir();
+  $('batchRecursive').onchange = () => scanBatchDir();
+  $('batchMode').onchange = updateBatchHints;
+  $('btnBatchPickOut').onclick = async () => {
+    const res = await window.api.pickDir();
+    if (!res || !res.dir) return;
+    $('batchOutDir').value = res.dir;
+  };
+  $('btnBatchCancel').onclick = () => $('batchModal').classList.add('hidden');
+  $('btnBatchRun').onclick = runBatch;
+}
+
+/** 打开批量处理对话框 */
+function openBatchDialog() {
+  $('batchModal').classList.remove('hidden');
+  $('batchResult').classList.add('hidden');
+  updateBatchHints();
+  $('batchSigPreview').textContent = '署名：' + (buildSignature() || '（不写入）');
+}
+
+/** 根据更新方式更新提示文案 */
+function updateBatchHints() {
+  const mode = $('batchMode').value;
+  const hints = {
+    suffix: '在原文件名后加 _CN 后缀，存到原目录。原文件保持不变，最安全。',
+    overwrite: '直接覆盖原文件。覆盖前会自动在同目录留下一个 .bak 备份。',
+    folder: '全部输出到指定文件夹，文件名保持不变（扩展名按所选格式调整）。',
+  };
+  $('batchModeHint').textContent = hints[mode] || '';
+  $('batchOutRow').classList.toggle('hidden', mode !== 'folder');
+}
+
+/** 扫描目录 */
+async function scanBatchDir() {
+  const dir = $('batchDir').value.trim();
+  if (!dir) return;
+
+  $('batchScanInfo').textContent = '正在扫描...';
+  $('batchFileList').classList.add('hidden');
+  $('batchRun') && ($('btnBatchRun').disabled = true);
+
+  const res = await window.api.batchScan({
+    dir,
+    recursive: $('batchRecursive').checked,
+  });
+
+  if (!res.ok) {
+    $('batchScanInfo').textContent = '扫描失败：' + res.error;
+    batchState.files = [];
+    return;
+  }
+
+  batchState.dir = dir;
+  batchState.files = res.files || [];
+  batchState.skipped = res.skipped || [];
+
+  const total = batchState.files.length;
+  const entries = batchState.files.reduce((s, f) => s + f.count, 0);
+  let info = `找到 ${total} 个金手指文件，共 ${entries} 条修改项`;
+  if (batchState.skipped.length) {
+    info += `；跳过 ${batchState.skipped.length} 个无法解析的文件`;
+  }
+  $('batchScanInfo').textContent = info;
+
+  // 渲染文件列表
+  const list = $('batchFileList');
+  list.innerHTML = batchState.files.map((f) => `
+    <div class="batch-row">
+      <span class="b-fmt">${f.ext}</span>
+      <span class="b-name" title="${f.name}">${f.name}</span>
+      <span class="b-game" title="${f.game || ''}">${f.game || '—'}</span>
+      <span class="b-stat">${f.count} 条</span>
+    </div>
+  `).join('');
+  list.classList.toggle('hidden', total === 0);
+  $('btnBatchRun').disabled = total === 0;
+}
+
+/** 执行批量处理 */
+async function runBatch() {
+  const mode = $('batchMode').value;
+  const outDir = $('batchOutDir').value.trim();
+
+  if (mode === 'folder' && !outDir) {
+    setStatus('请先选择输出文件夹', true);
+    return;
+  }
+
+  const btn = $('btnBatchRun');
+  btn.disabled = true;
+  btn.textContent = '处理中...';
+
+  const res = await window.api.batchProcess({
+    dir: batchState.dir,
+    files: batchState.files,
+    mode,
+    outDir,
+    recursive: $('batchRecursive').checked,
+    // 传模板而非预渲染结果 —— 主进程会按每个文件的游戏名/版本分别渲染
+    signature: (state.settings.signature || '').trim(),
+    author: (state.settings.author || '').trim(),
+    signatureMode: state.settings.signatureMode,
+    targetFormat: $('batchFormat').value,
+    skipUnchanged: $('batchSkipUnchanged').checked,
+  });
+
+  btn.disabled = false;
+  btn.textContent = '开始处理';
+
+  if (!res.ok) {
+    setStatus('批量处理失败：' + res.error, true);
+    return;
+  }
+
+  renderBatchResult(res);
+  const s = res.summary;
+  setStatus(`批量处理完成：${s.success}/${s.total} 个文件成功，翻译 ${s.translated}/${s.entries} 条`);
+}
+
+function renderBatchResult(res) {
+  const s = res.summary;
+  const box = $('batchResult');
+  const lines = res.results.map((r) => {
+    if (!r.ok) {
+      return `<div class="br-line"><span class="bl-name">${r.name}</span><span class="br-fail">✗ ${r.error || '失败'}</span></div>`;
+    }
+    let detail = `${r.translated}/${r.total} 条已译`;
+    if (r.outName) detail += ` → ${r.outName}`;
+    else if (r.skipped) detail = r.skipped;
+    return `<div class="br-line"><span class="bl-name">${r.name}</span><span class="br-ok">✓ ${detail}</span></div>`;
+  }).join('');
+
+  box.innerHTML = `
+    <div class="br-line"><b>完成</b>：${s.success}/${s.total} 个文件，翻译 ${s.translated}/${s.entries} 条${
+      s.failed ? `，${s.failed} 个失败` : ''
+    }</div>
+    <div style="height:6px"></div>
+    ${lines}
+  `;
+  box.classList.remove('hidden');
+}
+
+// ---------------------------------------------------------------- 关于
+
+const GITHUB_URL = 'https://github.com/liweili/PS5CheatCN';
+const RELEASE_URL = 'https://github.com/liweili/PS5CheatCN/releases/latest';
+
+function bindAbout() {
+  $('btnAboutClose').onclick = () => $('aboutModal').classList.add('hidden');
+  $('btnAboutGithub').onclick = () => window.api.openExternal(GITHUB_URL);
+  $('btnAboutRelease').onclick = () => window.api.openExternal(RELEASE_URL);
+}
+
+function openAboutDialog() {
+  // 版本号从 package.json 取（主进程已注入 window.__APP_VERSION__）
+  const v = window.__APP_VERSION__ || '';
+  $('aboutVersion').textContent = v ? `版本 ${v}` : '版本 —';
+  $('aboutModal').classList.remove('hidden');
 }
 
 // ---------------------------------------------------------------- 格式转换
@@ -594,6 +843,7 @@ function bindMenu() {
       case 'translateAll': if (state.mods.length) doTranslateAll(); break;
       case 'revertAll': if (state.mods.length) doRevertAll(); break;
       case 'settings': $('settingsModal').classList.remove('hidden'); break;
+      case 'about': openAboutDialog(); break;
     }
   });
 }

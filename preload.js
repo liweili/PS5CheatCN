@@ -12,5 +12,8 @@ contextBridge.exposeInMainWorld('api', {
   translateOne: (name) => ipcRenderer.invoke('tr:one', name),
   translateBatch: (names) => ipcRenderer.invoke('tr:batch', names),
   openDir: (dir) => ipcRenderer.invoke('shell:openDir', dir),
+  openExternal: (url) => ipcRenderer.invoke('shell:openExternal', url),
+  batchScan: (opts) => ipcRenderer.invoke('batch:scan', opts),
+  batchProcess: (opts) => ipcRenderer.invoke('batch:process', opts),
   onMenu: (cb) => ipcRenderer.on('menu', (e, action) => cb(action)),
 });

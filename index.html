@@ -34,9 +34,14 @@
     <button id="btnViewFull" class="btn" title="查看文件全文内容" disabled>
       <span class="ico">📄</span> 查看全文
     </button>
+    <span class="sep"></span>
+    <button id="btnBatch" class="btn" title="批量处理整个文件夹">
+      <span class="ico">📦</span> 批量处理
+    </button>
   </div>
   <div class="tb-right">
     <span id="fileInfo" class="file-info">未打开文件</span>
+    <button id="btnAbout" class="btn btn-ghost" title="关于本工具">ℹ</button>
     <button id="btnSettings" class="btn btn-ghost" title="设置">⚙</button>
   </div>
 </header>
@@ -104,12 +109,6 @@
     <h3>设置</h3>
 
     <div class="form-row">
-      <label>署名信息</label>
-      <div class="form-hint">保存时写入文件，例如：————翻译：L.wl，编辑时间20261104————</div>
-      <input type="text" id="setSignature" placeholder="————翻译：L.wl，编辑时间20261104————">
-    </div>
-
-    <div class="form-row">
       <label>署名方式</label>
       <select id="setSigMode">
         <option value="entry">作为独立条目追加（推荐）</option>
@@ -121,6 +120,29 @@
     <div class="form-row">
       <label>译者名</label>
       <input type="text" id="setAuthor" placeholder="L.wl">
+      <div class="form-hint">用于替换署名模板里的 <code>{作者}</code></div>
+    </div>
+
+    <div class="form-row">
+      <label>署名模板</label>
+      <input type="text" id="setSignature" placeholder="————翻译：{作者}，编辑时间{日期}————">
+      <div class="form-hint">
+        可用变量：<code>{作者}</code> <code>{日期}</code> <code>{游戏}</code> <code>{版本}</code>
+        <br>留空则使用默认规则：<code>————翻译：{作者}，编辑时间{日期}————</code>
+      </div>
+      <div class="sig-presets">
+        <span class="sig-preset-label">快速填入：</span>
+        <button type="button" class="btn btn-small" data-sig="————翻译：{作者}，编辑时间{日期}————">默认规则</button>
+        <button type="button" class="btn btn-small" data-sig="————汉化：{作者} {日期}————">简洁版</button>
+        <button type="button" class="btn btn-small" data-sig="————{游戏} 中文版，翻译：{作者}，编辑时间{日期}————">带游戏名</button>
+        <button type="button" class="btn btn-small" data-sig="[CN] {作者} {日期}">方括号版</button>
+        <button type="button" class="btn btn-small" data-sig="">清空（用默认）</button>
+      </div>
+    </div>
+
+    <div class="form-row">
+      <label>署名预览</label>
+      <div class="sig-preview" id="sigPreview">————翻译：L.wl，编辑时间20261104————</div>
     </div>
 
     <div class="form-row">
@@ -137,6 +159,119 @@
     <div class="modal-actions">
       <button id="btnSetCancel" class="btn">取消</button>
       <button id="btnSetSave" class="btn btn-primary">确定</button>
+    </div>
+  </div>
+</div>
+
+<!-- 批量处理对话框 -->
+<div id="batchModal" class="modal hidden">
+  <div class="modal-box wide">
+    <h3>批量处理文件夹</h3>
+    <div class="ed-hint" style="margin-bottom:12px">
+      扫描文件夹里的全部金手指文件（MC4 / SHN / JSON），统一汉化并保存。
+    </div>
+
+    <div class="form-row">
+      <label>选择文件夹</label>
+      <div style="display:flex;gap:8px;align-items:center">
+        <input type="text" id="batchDir" readonly placeholder="尚未选择文件夹" style="flex:1">
+        <button class="btn btn-small" id="btnBatchPick">选择...</button>
+        <button class="btn btn-small" id="btnBatchRescan">重新扫描</button>
+      </div>
+    </div>
+
+    <div class="form-row">
+      <label>扫描范围</label>
+      <label style="display:inline-flex;align-items:center;gap:6px;font-weight:normal;cursor:pointer">
+        <input type="checkbox" id="batchRecursive" style="width:auto"> 包含子文件夹
+      </label>
+    </div>
+
+    <div id="batchScanInfo" class="ed-hint" style="margin-bottom:10px"></div>
+
+    <div class="form-row">
+      <label>更新方式</label>
+      <select id="batchMode">
+        <option value="suffix">生成 _CN 副本（保留原文件，最安全）</option>
+        <option value="overwrite">覆盖原文件（自动保留 .bak 备份）</option>
+        <option value="folder">统一输出到另一个文件夹</option>
+      </select>
+      <div class="ed-hint" id="batchModeHint"></div>
+    </div>
+
+    <div class="form-row hidden" id="batchOutRow">
+      <label>输出文件夹</label>
+      <div style="display:flex;gap:8px;align-items:center">
+        <input type="text" id="batchOutDir" readonly style="flex:1">
+        <button class="btn btn-small" id="btnBatchPickOut">选择...</button>
+      </div>
+    </div>
+
+    <div class="form-row">
+      <label>输出格式</label>
+      <select id="batchFormat">
+        <option value="">与各自原格式相同</option>
+        <option value="mc4">MC4（加密）</option>
+        <option value="shn">SHN（XML）</option>
+        <option value="json">JSON</option>
+      </select>
+    </div>
+
+    <div class="form-row">
+      <label>署名</label>
+      <div class="ed-hint" id="batchSigPreview"></div>
+    </div>
+
+    <div class="form-row">
+      <label>其它</label>
+      <label style="display:inline-flex;align-items:center;gap:6px;font-weight:normal;cursor:pointer">
+        <input type="checkbox" id="batchSkipUnchanged" style="width:auto" checked> 跳过完全没有可翻译内容的文件
+      </label>
+    </div>
+
+    <div id="batchFileList" class="batch-list hidden"></div>
+
+    <div id="batchResult" class="batch-result hidden"></div>
+
+    <div class="modal-actions">
+      <button id="btnBatchCancel" class="btn">取消</button>
+      <button id="btnBatchRun" class="btn btn-primary" disabled>开始处理</button>
+    </div>
+  </div>
+</div>
+
+<!-- 关于对话框 -->
+<div id="aboutModal" class="modal hidden">
+  <div class="modal-box">
+    <h3>关于本工具</h3>
+    <div class="about-head">
+      <img src="build/icon.png" alt="图标" class="about-icon" onerror="this.style.display='none'">
+      <div>
+        <div class="about-title">PS5 金手指自动汉化工具</div>
+        <div class="about-version" id="aboutVersion">版本 —</div>
+      </div>
+    </div>
+
+    <p class="about-desc">
+      支持 <b>MC4 / SHN / JSON</b> 三种格式的打开、编辑、自动汉化、保存与格式转换。
+      为破解主机的玩家做的离线汉化工具，<b>不联网、不上传任何数据</b>。
+    </p>
+
+    <div class="about-feat">
+      <div>· 逐条汉化 / 一键全译，支持手动微调</div>
+      <div>· 乱码与异常符号自动修正</div>
+      <div>· 游戏术语表（Combo → 连招 等 400+ 条）</div>
+      <div>· 批量处理整个文件夹</div>
+      <div>· MC4 加解密与官方 mc4-cheat-decrypter 一致</div>
+    </div>
+
+    <div class="about-links">
+      <button id="btnAboutGithub" class="btn btn-primary">打开 GitHub 项目主页</button>
+      <button id="btnAboutRelease" class="btn">下载最新版本</button>
+    </div>
+
+    <div class="modal-actions">
+      <button id="btnAboutClose" class="btn btn-primary">关闭</button>
     </div>
   </div>
 </div>
