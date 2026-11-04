@@ -70,12 +70,13 @@ function buildMenu() {
 }
 
 app.whenReady().then(() => {
+  // 先搬说明文档，再建窗口。
+  // 放在 createWindow 之前是为了保证：即使窗口创建失败（无显卡/沙箱环境），
+  // 说明文档也已经复制到位。
+  copyReadmeToAppDir();
+
   buildMenu();
   createWindow();
-
-  // 延迟到窗口创建后再搬运说明文档：
-  // whenReady 阶段 app.getPath('exe') 尚未完全就绪，早调用会拿到错误路径。
-  setTimeout(copyReadmeToAppDir, 1500);
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
