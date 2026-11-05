@@ -219,7 +219,12 @@
 
     <div class="form-row">
       <label>署名</label>
+      <input type="text" id="batchSignature" placeholder="————翻译：{作者}，编辑时间{日期}————">
       <div class="ed-hint" id="batchSigPreview"></div>
+      <div class="ed-hint">
+        留空则用「设置」里配置的署名规则。可用变量：<code>{作者}</code> <code>{日期}</code> <code>{游戏}</code> <code>{版本}</code>
+        &nbsp;<a href="#" id="btnBatchEditSig" style="color:var(--accent)">去设置里改默认规则</a>
+      </div>
     </div>
 
     <div class="form-row">
@@ -307,13 +312,21 @@
     </div>
 
     <div class="form-row">
-      <label>署名信息</label>
+      <label>署名方式</label>
       <select id="saveSigMode">
         <option value="entry">作为独立条目追加（推荐）</option>
         <option value="suffix">附加到每个条目名称后</option>
         <option value="none">不写入署名</option>
       </select>
+    </div>
+
+    <div class="form-row">
+      <label>署名内容</label>
+      <input type="text" id="saveSignature" placeholder="————翻译：{作者}，编辑时间{日期}————">
       <div class="ed-hint" id="saveSigPreview"></div>
+      <div class="ed-hint">
+        留空则用「设置」里的默认规则。可用变量：<code>{作者}</code> <code>{日期}</code> <code>{游戏}</code> <code>{版本}</code>
+      </div>
     </div>
 
     <div class="modal-actions">

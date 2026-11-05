@@ -199,6 +199,38 @@ section('批量处理：扫描与产出');
   fs.rmSync(outDir, { recursive: true, force: true });
 }
 
+// ================================================================ 署名可编辑性
+section('署名在各处都可编辑');
+{
+  const html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
+  const renderer = fs.readFileSync(path.join(ROOT, 'renderer.js'), 'utf8');
+  const main = fs.readFileSync(path.join(ROOT, 'main.js'), 'utf8');
+
+  ok(html.includes('id="setSignature"'), '设置对话框有模板输入框');
+  ok(html.includes('id="saveSignature"'), '保存对话框有可编辑的署名输入框');
+  ok(html.includes('id="batchSignature"'), '批量对话框有可编辑的署名输入框');
+  ok(html.includes('id="sigPreview"'), '设置里有实时预览');
+  ok(html.includes('id="saveSigPreview"'), '保存对话框有预览');
+  ok(html.includes('id="batchSigPreview"'), '批量对话框有预览');
+  ok(html.includes('id="btnBatchEditSig"'), '批量对话框有「去设置里改」入口');
+
+  // 保存时传的是模板（不是预渲染结果），由主进程渲染
+  ok(renderer.includes("signature: ($('saveSignature').value || state.settings.signature || '').trim()"),
+    '保存时传模板而非渲染结果');
+  ok(renderer.includes("signature: ($('batchSignature').value || state.settings.signature || '').trim()"),
+    '批量保存时传模板而非渲染结果');
+
+  // 主进程三条保存路径都要渲染模板
+  ok(main.includes('function sigOptsFor(model, opts)'), '主进程有统一的签名渲染辅助函数');
+  ok(main.includes('F.serialize(m, sigOptsFor(m, opts))'), 'file:save 渲染签名');
+  ok(main.includes('const sigOpts = sigOptsFor(m, opts);'), 'file:saveAs 渲染签名');
+  ok(main.includes('const sigOpts = { ...o, signature: sigText };'), 'file:saveTo 渲染签名');
+  ok(main.includes('const sigText = renderSignature(signature, {'), 'batch:process 渲染签名');
+
+  // 渲染层不再直接用 buildSignature 的结果去保存
+  ok(!renderer.includes('signature: buildSignature(),'), '渲染层不再直接传渲染结果');
+}
+
 // ================================================================ 关于对话框
 section('关于对话框与 GitHub 链接');
 {

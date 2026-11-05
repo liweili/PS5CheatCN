@@ -367,6 +367,8 @@ function openSaveDialog(forceFormat) {
   $('saveDir').value = (state.filePath || '').replace(/[\\/][^\\/]*$/, '');
   $('saveFormat').value = defFmt === srcExt ? '' : defFmt;
   $('saveSigMode').value = state.settings.signatureMode;
+  // 署名框填当前模板（不是渲染后的结果）
+  $('saveSignature').value = (state.settings.signature || '').trim();
 
   updateSaveHints();
   $('saveModal').classList.remove('hidden');
@@ -385,9 +387,15 @@ function updateSaveHints() {
   const mode = $('saveSigMode').value;
   if (mode === 'none') {
     $('saveSigPreview').textContent = '保存时不写入任何署名信息';
-  } else {
-    $('saveSigPreview').textContent = '署名：' + buildSignature();
+    return;
   }
+  // 用输入框里的当前模板即时预览
+  const tmpl = ($('saveSignature').value || '').trim();
+  const saved = state.settings;
+  state.settings = { ...saved, signature: tmpl, signatureMode: mode };
+  const text = buildSignature();
+  state.settings = saved;
+  $('saveSigPreview').textContent = '实际写入：' + (text || '（空）');
 }
 
 /** 执行保存（使用保存对话框里的设置） */
@@ -418,7 +426,9 @@ async function doSaveWithDialog() {
       plainXml: state.plainXml,
     },
     opts: {
-      signature: buildSignature(),
+      // 传模板，主进程按当前文件的游戏名/版本渲染
+      signature: ($('saveSignature').value || state.settings.signature || '').trim(),
+      author: (state.settings.author || '').trim(),
       signatureMode: $('saveSigMode').value,
       targetFormat,
     },
@@ -577,6 +587,7 @@ function bindSaveDialog() {
   };
   $('saveFormat').onchange = updateSaveHints;
   $('saveSigMode').onchange = updateSaveHints;
+  $('saveSignature').oninput = updateSaveHints;
   // 文件名随格式联动扩展名
   $('saveFileName').oninput = () => {
     const fmt = $('saveFormat').value || state.sourceFormat;
@@ -612,6 +623,13 @@ function bindBatch() {
   };
   $('btnBatchCancel').onclick = () => $('batchModal').classList.add('hidden');
   $('btnBatchRun').onclick = runBatch;
+  $('batchSignature').oninput = updateBatchSigPreview;
+  $('btnBatchEditSig').onclick = (e) => {
+    e.preventDefault();
+    $('batchModal').classList.add('hidden');
+    $('settingsModal').classList.remove('hidden');
+    updateSigPreview();
+  };
 }
 
 /** 打开批量处理对话框 */
@@ -619,7 +637,21 @@ function openBatchDialog() {
   $('batchModal').classList.remove('hidden');
   $('batchResult').classList.add('hidden');
   updateBatchHints();
-  $('batchSigPreview').textContent = '署名：' + (buildSignature() || '（不写入）');
+  // 署名框填当前模板（不是渲染后的结果）——主进程会按每个文件分别渲染
+  $('batchSignature').value = (state.settings.signature || '').trim();
+  updateBatchSigPreview();
+}
+
+/** 更新批量对话框里的署名预览 */
+function updateBatchSigPreview() {
+  const tmpl = $('batchSignature').value;
+  const saved = state.settings;
+  state.settings = { ...saved, signature: tmpl };
+  const text = buildSignature();
+  state.settings = saved;
+  $('batchSigPreview').textContent = state.settings.signatureMode === 'none'
+    ? '当前署名方式为「不写入署名」，此处设置不会生效'
+    : '实际写入：' + (text || '（空）');
 }
 
 /** 根据更新方式更新提示文案 */
@@ -701,7 +733,8 @@ async function runBatch() {
     outDir,
     recursive: $('batchRecursive').checked,
     // 传模板而非预渲染结果 —— 主进程会按每个文件的游戏名/版本分别渲染
-    signature: (state.settings.signature || '').trim(),
+    // 优先用批量对话框里填的（可临时改），留空则用设置里的默认模板
+    signature: ($('batchSignature').value || state.settings.signature || '').trim(),
     author: (state.settings.author || '').trim(),
     signatureMode: state.settings.signatureMode,
     targetFormat: $('batchFormat').value,

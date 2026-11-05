@@ -165,11 +165,28 @@ ipcMain.handle('file:openPath', async (evt, filePath) => {
   }
 });
 
+/**
+ * 把署名模板渲染成最终文本。
+ * 署名在渲染层传的是模板（可能含 {作者} {日期} {游戏} {版本}），
+ * 必须在主进程按当前文件的元信息渲染。
+ */
+function sigOptsFor(model, opts) {
+  const o = opts || {};
+  const sigText = renderSignature(o.signature, {
+    author: o.author || '',
+    game: (model && model.meta && model.meta.game) || '',
+    version: (model && model.meta && model.meta.version) || '',
+    signatureMode: o.signatureMode || 'entry',
+  });
+  return { ...o, signature: sigText };
+}
+
 /** 保存到原文件 */
 ipcMain.handle('file:save', async (evt, payload) => {
   const { filePath, model, opts } = payload;
   try {
-    const out = F.serialize(reviveModel(model), opts || {});
+    const m = reviveModel(model);
+    const out = F.serialize(m, sigOptsFor(m, opts));
     fs.writeFileSync(filePath, out.text, 'utf8');
     return { ok: true, filePath, changed: out.changed };
   } catch (e) {
@@ -193,12 +210,13 @@ ipcMain.handle('file:saveAs', async (evt, payload) => {
   if (res.canceled || !res.filePath) return { canceled: true };
   try {
     const m = reviveModel(model);
+    const sigOpts = sigOptsFor(m, opts);
     let text;
     if (opts && opts.targetFormat && opts.targetFormat !== m.sourceFormat) {
       // 格式转换输出
-      text = F.convertModel(m, opts.targetFormat);
+      text = F.convertModel(m, opts.targetFormat, sigOpts);
     } else {
-      text = F.serialize(m, opts || {}).text;
+      text = F.serialize(m, sigOpts).text;
     }
     fs.writeFileSync(res.filePath, text, 'utf8');
     return { ok: true, filePath: res.filePath };
@@ -227,13 +245,24 @@ ipcMain.handle('file:saveTo', async (evt, payload) => {
   try {
     const m = reviveModel(model);
     const targetFormat = (opts && opts.targetFormat) || m.sourceFormat;
+
+    // 署名是模板，先按当前文件的游戏名/版本渲染成最终文本
+    const o = opts || {};
+    const sigText = renderSignature(o.signature, {
+      author: o.author || '',
+      game: (m.meta && m.meta.game) || '',
+      version: (m.meta && m.meta.version) || '',
+      signatureMode: o.signatureMode || 'entry',
+    });
+    const sigOpts = { ...o, signature: sigText };
+
     let text;
     if (targetFormat !== m.sourceFormat) {
       // 跨格式转换：重新生成整个文件（同样写入署名）
-      text = F.convertModel(m, targetFormat, opts || {});
+      text = F.convertModel(m, targetFormat, sigOpts);
     } else {
       // 同格式：定点替换，保留原文件其余内容
-      text = F.serialize(m, opts || {}).text;
+      text = F.serialize(m, sigOpts).text;
     }
     fs.writeFileSync(filePath, text, 'utf8');
     return { ok: true, filePath };
