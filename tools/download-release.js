@@ -100,8 +100,23 @@ function downloadAsset(asset, outPath) {
       });
       res.on('end', () => {
         f.end();
+        // 关键：校验实际收到的字节数。
+        // 附件在下载途中被删除/替换时连接会提前断开，
+        // 此时若不校验，会留下一个截断的文件却报告「成功」。
+        if (total && got < total) {
+          console.error(`\n    ✗ 下载不完整：只收到 ${got}/${total} 字节（${((got / total) * 100).toFixed(1)}%）`);
+          try { fs.unlinkSync(outPath); } catch (e) { /* ignore */ }
+          resolve(false);
+          return;
+        }
         process.stdout.write(`\r    ${(got / 1048576).toFixed(1)}MB 完成                    \n`);
         resolve(true);
+      });
+      res.on('error', (e) => {
+        console.error('\n    ✗ 下载出错:', e.message);
+        f.end();
+        try { fs.unlinkSync(outPath); } catch (e2) { /* ignore */ }
+        resolve(false);
       });
       res.pipe(f);
     });
@@ -128,12 +143,28 @@ async function main() {
     process.exit(1);
   }
 
+  let failed = 0;
   for (const a of assets) {
     const out = path.join(dest, a.name);
     console.log(`下载 ${a.name} (${(a.size / 1048576).toFixed(1)}MB)`);
     const ok = await downloadAsset(a, out);
-    if (ok) console.log(`  ✓ ${out}`);
-    else console.error(`  ✗ 失败`);
+    if (ok) {
+      console.log(`  ✓ ${out}`);
+      // 二次校验：落盘文件大小必须与服务器声明一致
+      const localSize = fs.statSync(out).size;
+      if (localSize !== a.size) {
+        console.error(`  ✗ 大小不符：本地 ${localSize} / 远端 ${a.size}`);
+        fs.unlinkSync(out);
+        failed++;
+      }
+    } else {
+      console.error(`  ✗ 失败`);
+      failed++;
+    }
+  }
+  if (failed) {
+    console.error(`\n${failed} 个附件下载失败`);
+    process.exit(1);
   }
 }
 
