@@ -15,5 +15,9 @@ contextBridge.exposeInMainWorld('api', {
   openExternal: (url) => ipcRenderer.invoke('shell:openExternal', url),
   batchScan: (opts) => ipcRenderer.invoke('batch:scan', opts),
   batchProcess: (opts) => ipcRenderer.invoke('batch:process', opts),
+  batchCancel: () => ipcRenderer.invoke('batch:cancel'),
+  batchRollback: () => ipcRenderer.invoke('batch:rollback'),
+  batchConfirmRollback: () => ipcRenderer.invoke('batch:confirmRollback'),
+  onBatchProgress: (cb) => ipcRenderer.on('batch:progress', (e, p) => cb(p)),
   onMenu: (cb) => ipcRenderer.on('menu', (e, action) => cb(action)),
 });

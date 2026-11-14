@@ -244,6 +244,7 @@ body { display: flex; flex-direction: column; }
   position: fixed; inset: 0;
   background: rgba(0,0,0,.55);
   display: flex; align-items: center; justify-content: center;
+  padding: 20px;
   z-index: 100;
 }
 .modal-box {
@@ -252,6 +253,9 @@ body { display: flex; flex-direction: column; }
   border-radius: 10px;
   padding: 20px 22px;
   min-width: 440px; max-width: 620px;
+  max-height: calc(100vh - 40px);
+  overflow-y: auto;
+  box-sizing: border-box;
   box-shadow: 0 18px 50px rgba(0,0,0,.5);
 }
 .modal-box h3 { font-size: 15px; margin-bottom: 16px; font-weight: 600; }
@@ -270,7 +274,14 @@ body { display: flex; flex-direction: column; }
 .form-row input:focus, .form-row select:focus { outline: none; border-color: var(--accent); }
 .form-hint { color: var(--text-mute); font-size: 11px; margin-bottom: 5px; }
 
-.modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
+.modal-actions {
+  display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px;
+  position: sticky; bottom: 0;
+  background: var(--bg-2);
+  padding: 12px 0 4px;
+  border-top: 1px solid var(--border);
+  z-index: 2;
+}
 
 /* 转换卡片 */
 .convert-row { display: flex; gap: 10px; }
@@ -287,7 +298,7 @@ body { display: flex; flex-direction: column; }
 .conv-desc { font-size: 11px; color: var(--text-mute); line-height: 1.6; }
 
 /* ---------------- 保存 / 全文 模态框补充 ---------------- */
-.modal-box.wide { min-width: 720px; max-width: 1000px; width: 78vw; }
+.modal-box.wide { min-width: 0; max-width: min(1000px, 94vw); width: min(1000px, 94vw); }
 
 .full-actions {
   display: flex; align-items: center; gap: 8px; margin-bottom: 8px;
@@ -350,7 +361,78 @@ body { display: flex; flex-direction: column; }
   color: var(--accent);
 }
 
+/* ---------------- 工具栏「打开」下拉 ---------------- */
+
+.tb-menu-wrap { position: relative; }
+.tb-menu-wrap .caret { font-size: 10px; opacity: .75; margin-left: 2px; }
+.tb-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  min-width: 230px;
+  padding: 6px;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 12px 28px rgba(0,0,0,.45);
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.tb-menu-item {
+  text-align: left;
+  padding: 8px 10px;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  color: var(--text);
+  font-size: 12.5px;
+  font-family: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.tb-menu-item:hover { background: var(--bg-3); }
+
 /* ---------------- 批量处理 ---------------- */
+
+.batch-progress {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  margin-bottom: 10px;
+}
+.bp-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+  color: var(--text-dim);
+  margin-bottom: 6px;
+}
+.bp-bar {
+  height: 8px;
+  background: var(--bg-3);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.bp-fill {
+  height: 100%;
+  width: 0;
+  border-radius: 4px;
+  background: linear-gradient(90deg, var(--accent), #3ddc97);
+  transition: width .15s linear;
+}
+.bp-sub {
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--text-mute);
+  font-family: var(--mono);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
 .batch-list {
   max-height: 220px;

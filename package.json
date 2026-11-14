@@ -1,7 +1,7 @@
 {
   "name": "ps5-cheat-cn",
   "productName": "PS5金手指自动汉化工具",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "description": "PS5/PS4 金手指自动汉化工具，支持 MC4 / SHN / JSON",
   "main": "main.js",
   "author": "L.wl",

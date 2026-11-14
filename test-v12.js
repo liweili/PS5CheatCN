@@ -265,13 +265,19 @@ section('批量处理界面元素');
 {
   const html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
   ok(html.includes('id="batchModal"'), '有批量处理对话框');
-  ok(html.includes('id="btnBatch"'), '工具栏有「批量处理」按钮');
+  ok(html.includes('id="btnOpenFolder"'), '「打开」下拉里有「打开文件夹（批量处理）」');
+  ok(!html.includes('id="btnBatch"'), '不再单独提供「批量处理」按钮');
   ok(html.includes('id="batchMode"'), '有更新方式选择');
+  ok(html.includes('_PS5汉化备份'), '覆盖模式默认把原文件备份到独立文件夹');
+  ok(/<option value="overwrite" selected>/.test(html), '默认选择「替换原文件」');
   ok(html.includes('id="batchDir"'), '有文件夹选择');
   ok(html.includes('id="batchOutDir"'), '有输出文件夹选择');
   ok(html.includes('id="batchFormat"'), '有输出格式选择');
   ok(html.includes('id="batchFileList"'), '有文件列表');
   ok(html.includes('id="batchResult"'), '有结果区');
+  ok(html.includes('id="batchProgress"'), '有进度显示区');
+  ok(html.includes('id="bpFill"'), '有进度条');
+  ok(html.includes('id="btnBatchCancel"'), '有终止按钮');
 
   // 三种更新方式
   ok(html.includes('value="suffix"'), '支持「_CN 副本」模式');

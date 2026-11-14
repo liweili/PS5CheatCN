@@ -11,9 +11,15 @@
 <!-- 顶部工具栏 -->
 <header class="toolbar">
   <div class="tb-left">
-    <button id="btnOpen" class="btn btn-primary" title="打开金手指文件 (Ctrl+O)">
-      <span class="ico">📂</span> 打开文件
-    </button>
+    <div class="tb-menu-wrap">
+      <button id="btnOpen" class="btn btn-primary" title="打开金手指文件或文件夹 (Ctrl+O)">
+        <span class="ico">📂</span> 打开 <span class="caret">▾</span>
+      </button>
+      <div id="openMenu" class="tb-menu hidden">
+        <button type="button" id="btnOpenFile" class="tb-menu-item">📄 打开文件…</button>
+        <button type="button" id="btnOpenFolder" class="tb-menu-item">📁 打开文件夹（批量处理）…</button>
+      </div>
+    </div>
     <button id="btnSave" class="btn" title="保存 (Ctrl+S)" disabled>
       <span class="ico">💾</span> 保存
     </button>
@@ -33,10 +39,6 @@
     </button>
     <button id="btnViewFull" class="btn" title="查看文件全文内容" disabled>
       <span class="ico">📄</span> 查看全文
-    </button>
-    <span class="sep"></span>
-    <button id="btnBatch" class="btn" title="批量处理整个文件夹">
-      <span class="ico">📦</span> 批量处理
     </button>
   </div>
   <div class="tb-right">
@@ -192,8 +194,8 @@
     <div class="form-row">
       <label>更新方式</label>
       <select id="batchMode">
+        <option value="overwrite" selected>替换原文件（原文件备份到「_PS5汉化备份」文件夹）</option>
         <option value="suffix">生成 _CN 副本（保留原文件，最安全）</option>
-        <option value="overwrite">覆盖原文件（自动保留 .bak 备份）</option>
         <option value="folder">统一输出到另一个文件夹</option>
       </select>
       <div class="ed-hint" id="batchModeHint"></div>
@@ -234,12 +236,21 @@
       </label>
     </div>
 
+    <div id="batchProgress" class="batch-progress hidden">
+      <div class="bp-top">
+        <span id="bpPhase">准备中…</span>
+        <span id="bpPct">0%</span>
+      </div>
+      <div class="bp-bar"><div id="bpFill" class="bp-fill"></div></div>
+      <div id="bpSub" class="bp-sub"></div>
+    </div>
+
     <div id="batchFileList" class="batch-list hidden"></div>
 
     <div id="batchResult" class="batch-result hidden"></div>
 
     <div class="modal-actions">
-      <button id="btnBatchCancel" class="btn">取消</button>
+      <button id="btnBatchCancel" class="btn">关闭</button>
       <button id="btnBatchRun" class="btn btn-primary" disabled>开始处理</button>
     </div>
   </div>

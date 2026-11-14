@@ -348,15 +348,49 @@ function writeJson(model, originalText) {
   return { text: out, changed };
 }
 
+/**
+ * 把 SHN / MC4 明文里的作者（Trainer 的 Moder 属性）改为指定作者。
+ * 没有 Moder 属性时补上一个。
+ */
+function rewriteShnAuthor(xml, author) {
+  const name = String(author == null ? '' : author).trim();
+  if (!name || !xml) return xml;
+  const re = /(<Trainer\b[^>]*?\bModer=")([^"]*)(")/i;
+  if (re.test(xml)) {
+    return xml.replace(re, (m0, p1, old, p3) => (
+      unescXml(old) === name ? m0 : p1 + escXml(name) + p3
+    ));
+  }
+  return xml.replace(/<Trainer\b([^>]*)>/i, (m0, attrs) => `<Trainer${attrs} Moder="${escXml(name)}">`);
+}
+
+/** 把 JSON 的 credits 整体替换为指定作者（旧作者的署名一并移除） */
+function rewriteJsonCredits(text, author) {
+  const name = String(author == null ? '' : author).trim();
+  if (!name) return text;
+  const re = /"credits"\s*:\s*\[[\s\S]*?\]/;
+  const val = JSON.stringify([name]);
+  if (re.test(text)) return text.replace(re, `"credits": ${val}`);
+
+  const i = text.indexOf('{');
+  if (i < 0) return text;
+  return text.slice(0, i + 1) + `\n  "credits": ${val},` + text.slice(i + 1);
+}
+
 // ---------------------------------------------------------------- 格式转换
 
 /**
  * 将统一模型转换为目标格式并序列化
  * @param {string} target 'json' | 'shn' | 'mc4'
+ * @param {object} opts { signature, signatureMode, rewriteAuthor }
  */
 function convertModel(model, target, opts = {}) {
   const signature = opts.signature || '';
   const signatureMode = opts.signatureMode || 'none';
+  // 批量处理时可以把作者统一改成当前默认作者
+  const authorName = (opts.rewriteAuthor != null && String(opts.rewriteAuthor).trim())
+    ? String(opts.rewriteAuthor).trim()
+    : (model.meta.author || '');
 
   // 署名条目/后缀：跨格式转换时同样要写入，保持与同格式保存一致
   let mods = model.mods.map((m) => ({ ...m }));
@@ -365,8 +399,8 @@ function convertModel(model, target, opts = {}) {
   }
 
   if (target === 'json') {
-    const credits = model.meta.author
-      ? String(model.meta.author).split(/[,;]/).map((s) => s.trim()).filter(Boolean)
+    const credits = authorName
+      ? String(authorName).split(/[,;]/).map((s) => s.trim()).filter(Boolean)
       : [];
     if (signature && signatureMode === 'entry' && !credits.includes(signature)) {
       credits.push(signature);
@@ -393,7 +427,7 @@ function convertModel(model, target, opts = {}) {
   // shn / mc4 都用 SHN 的 XML 结构
   const attrs = [
     `Game="${escXml(model.meta.game || '')}"`,
-    `Moder="${escXml(model.meta.author || '')}"`,
+    `Moder="${escXml(authorName)}"`,
     `Cusa="${escXml(model.meta.cusa || '')}"`,
     `Version="${escXml(model.meta.version || '')}"`,
     `Process="${escXml(model.meta.process || '')}"`,
@@ -428,15 +462,16 @@ function convertModel(model, target, opts = {}) {
 /**
  * 保存：保持原格式
  * @param {object} model 统一模型
- * @param {object} opts  { signature, signatureMode }
+ * @param {object} opts  { signature, signatureMode, rewriteAuthor }
  */
 function serialize(model, opts = {}) {
   const sig = opts.signature || '';
   const mode = opts.signatureMode || 'entry'; // entry | suffix | none
+  const rewriteAuthor = String(opts.rewriteAuthor || '').trim();
 
   if (model.sourceFormat === 'json') {
     let r = writeJson(model, model.raw);
-    let text = r.text;
+    let text = rewriteAuthor ? rewriteJsonCredits(r.text, rewriteAuthor) : r.text;
     if (sig && mode === 'entry') {
       // JSON 用 credits 承载署名
       try {
@@ -449,12 +484,14 @@ function serialize(model, opts = {}) {
       const names = model.mods.map((m) => m.name + ' ' + sig);
       const m2 = Object.assign({}, model, { mods: model.mods.map((m, i) => ({ ...m, name: names[i] })) });
       text = writeJson(m2, model.raw).text;
+      if (rewriteAuthor) text = rewriteJsonCredits(text, rewriteAuthor);
     }
     return { text, changed: r.changed };
   }
 
   // shn / mc4
   let xml = model.sourceFormat === 'mc4' ? model.plainXml : model.raw;
+  if (rewriteAuthor) xml = rewriteShnAuthor(xml, rewriteAuthor);
   if (sig && mode === 'suffix') {
     const m2 = Object.assign({}, model, {
       mods: model.mods.map((m) => ({ ...m, name: m.name + ' ' + sig })),

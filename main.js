@@ -300,6 +300,29 @@ ipcMain.handle('file:pickDir', async (evt) => {
 // ---------------------------------------------------------------- 批量处理
 
 const CHEAT_EXTS = ['.mc4', '.shn', '.json'];
+/** 覆盖模式下的备份目录名（位于被处理文件夹根目录下） */
+const BATCH_BACKUP_DIR = '_PS5汉化备份';
+
+/** 批量任务取消标记 */
+let batchCancelRequested = false;
+/** 最近一次批量任务，用于终止后回滚 */
+let lastBatchRun = null;
+
+/** 给渲染层推送批量进度 */
+function sendBatchProgress(evt, payload) {
+  try {
+    if (evt && evt.sender && !evt.sender.isDestroyed()) {
+      evt.sender.send('batch:progress', payload);
+    }
+  } catch (e) { /* 窗口已关闭时忽略 */ }
+}
+
+/** 备份目录用的时间戳：20261114_153012_123 */
+function batchStamp() {
+  const d = new Date();
+  const p = (n, w = 2) => String(n).padStart(w, '0');
+  return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}_${p(d.getMilliseconds(), 3)}`;
+}
 
 /**
  * 渲染署名模板。
@@ -352,6 +375,8 @@ function scanCheatFiles(dir, recursive) {
     for (const e of entries) {
       const p = path.join(d, e.name);
       if (e.isDirectory()) {
+        // 跳过本工具的备份目录，避免把备份当成待处理文件
+        if (e.name === BATCH_BACKUP_DIR) continue;
         if (recursive && depth < 8) walk(p, depth + 1);
         continue;
       }
@@ -389,41 +414,98 @@ function probeCheatFile(filePath, ext) {
   }
 }
 
-/** 扫描文件夹里的金手指文件（带可解析性校验） */
+/** 扫描文件夹里的金手指文件（带可解析性校验，过程中上报进度） */
 ipcMain.handle('batch:scan', async (evt, opts) => {
   const { dir, recursive } = opts || {};
   if (!dir) return { ok: false, error: '未指定目录' };
   if (!fs.existsSync(dir)) return { ok: false, error: '目录不存在' };
 
+  batchCancelRequested = false;
   const candidates = scanCheatFiles(dir, !!recursive);
   const files = [];
   const skipped = [];
-  for (const c of candidates) {
+  const total = candidates.length;
+  let lastAt = 0;
+
+  for (let i = 0; i < candidates.length; i++) {
+    if (batchCancelRequested) {
+      return { ok: true, canceled: true, dir, files, skipped, total };
+    }
+    const c = candidates[i];
     const info = probeCheatFile(c.filePath, c.ext);
     if (info) files.push(info);
     else skipped.push({ name: c.name, reason: '无法解析为金手指文件' });
+
+    // 让出事件循环，避免大目录扫描时界面卡死
+    if (i % 20 === 0) await new Promise((r) => setImmediate(r));
+    const now = Date.now();
+    if (now - lastAt > 100 || i === total - 1) {
+      lastAt = now;
+      sendBatchProgress(evt, {
+        phase: 'scan', done: i + 1, total, found: files.length, current: c.name,
+      });
+    }
   }
-  return { ok: true, dir, files, skipped, total: candidates.length };
+  return { ok: true, dir, files, skipped, total };
 });
+
+/**
+ * 覆盖模式下把原文件复制到备份目录（保持相对目录结构）。
+ * 返回备份文件路径；失败时返回 null。
+ */
+function backupFile(filePath, rootDir, sourceDir) {
+  try {
+    let rel = sourceDir ? path.relative(sourceDir, filePath) : path.basename(filePath);
+    if (!rel || rel.startsWith('..') || path.isAbsolute(rel)) rel = path.basename(filePath);
+    const dst = path.join(rootDir, rel);
+    fs.mkdirSync(path.dirname(dst), { recursive: true });
+    fs.copyFileSync(filePath, dst);
+    return dst;
+  } catch (e) {
+    return null;
+  }
+}
 
 /**
  * 批量翻译并保存。
  *
  * mode:
- *   'suffix'   在原文件名后加 _CN 后缀，存到原目录（默认，最安全）
- *   'overwrite' 覆盖原文件（会先备份成 .bak）
- *   'folder'   统一输出到另一个文件夹（文件名不变）
+ *   'overwrite' 覆盖原文件（默认；原文件备份到 _PS5汉化备份/<时间戳>/）
+ *   'suffix'    在原文件名后加 _CN 后缀，存到原目录
+ *   'folder'    统一输出到另一个文件夹（文件名不变）
  *
+ * 处理过程中通过 batch:progress 上报进度，可用 batch:cancel 终止。
  * translateOnly: true 时只翻译不写盘，用于预览
  */
 ipcMain.handle('batch:process', async (evt, opts) => {
-  const { dir, files, mode, outDir, recursive, signature, signatureMode, author, targetFormat, translateOnly, skipUnchanged } = opts || {};
+  const {
+    dir, files, mode = 'overwrite', outDir, recursive, signature, signatureMode,
+    author, targetFormat, translateOnly, skipUnchanged,
+  } = opts || {};
   if (!Array.isArray(files) || !files.length) {
     return { ok: false, error: '没有待处理的文件' };
   }
 
+  batchCancelRequested = false;
+  const total = files.length;
+  const authorName = String(author || '').trim();
   const results = [];
-  for (const item of files) {
+  const written = [];   // 已写盘的文件记录，供终止回滚
+  let backupRoot = null;
+  let okCount = 0;
+  let translatedTotal = 0;
+  let entriesTotal = 0;
+  let lastAt = 0;
+
+  // 备份目录：<解压目录>/_PS5汉化备份/<时间戳>
+  const ensureBackupRoot = () => {
+    if (backupRoot) return backupRoot;
+    const base = dir || path.dirname(files[0].filePath);
+    backupRoot = path.join(base, BATCH_BACKUP_DIR, batchStamp());
+    return backupRoot;
+  };
+
+  const processOne = (item) => {
     const r = { name: item.name, filePath: item.filePath, ok: false };
     try {
       const raw = fs.readFileSync(item.filePath, 'utf8');
@@ -442,32 +524,45 @@ ipcMain.handle('batch:process', async (evt, opts) => {
       r.total = model.mods.length;
       r.hitRate = model.mods.length ? hit / model.mods.length : 0;
 
-      // 全部都没译出且允许跳过时，不写盘
-      const newModel = { ...model, mods: renamed };
+      // 发现别的作者 → 统一改成当前默认作者
+      const oldAuthor = String(model.meta.author || '').trim();
+      const fixAuthor = !!authorName && oldAuthor !== authorName;
+      r.authorFixed = fixAuthor;
+      r.oldAuthor = oldAuthor;
+      r.newAuthor = fixAuthor ? authorName : oldAuthor;
+
+      const newModel = {
+        ...model,
+        mods: renamed,
+        meta: fixAuthor ? { ...model.meta, author: authorName } : model.meta,
+      };
       const outFmt = targetFormat || srcFmt;
 
       if (translateOnly) {
         r.ok = true;
         r.preview = renamed.slice(0, 3).map((m) => m.name);
-        results.push(r);
-        continue;
+        return r;
       }
 
-      if (skipUnchanged && hit === 0) {
+      // 没有任何翻译且作者无需修正时才跳过
+      if (skipUnchanged && hit === 0 && !fixAuthor) {
         r.ok = true;
         r.skipped = '无改动，已跳过';
-        results.push(r);
-        continue;
+        return r;
       }
 
-      // 生成内容：署名在这里按当前文件的游戏名/版本渲染
+      // 生成内容：署名按当前文件的游戏名/版本渲染
       const sigText = renderSignature(signature, {
-        author: author || '',
+        author: authorName,
         game: model.meta.game || '',
         version: model.meta.version || '',
         signatureMode: signatureMode || 'entry',
       });
-      const sigOpts = { signature: sigText, signatureMode: signatureMode || 'entry' };
+      const sigOpts = {
+        signature: sigText,
+        signatureMode: signatureMode || 'entry',
+        rewriteAuthor: fixAuthor ? authorName : '',
+      };
       let text;
       if (outFmt !== srcFmt) {
         text = F.convertModel(newModel, outFmt, sigOpts);
@@ -480,24 +575,21 @@ ipcMain.handle('batch:process', async (evt, opts) => {
       const base = path.basename(item.filePath);
       const ext = path.extname(base);
       const stem = path.basename(base, ext);
+      let backupPath = null;
 
       if (mode === 'overwrite') {
         outPath = item.filePath;
-        // 覆盖前先备份，保留 .bak
-        try {
-          const bak = item.filePath + '.bak';
-          fs.copyFileSync(item.filePath, bak);
-          r.backup = path.basename(bak);
-        } catch (e) { /* 备份失败不阻止覆盖 */ }
+        // 覆盖前备份到独立的备份文件夹，不再生成同目录 .bak
+        backupPath = backupFile(item.filePath, ensureBackupRoot(), dir);
+        r.backup = backupPath ? path.basename(backupPath) : '';
       } else if (mode === 'folder') {
-        if (!outDir) { r.error = '未指定输出文件夹'; results.push(r); continue; }
+        if (!outDir) { r.error = '未指定输出文件夹'; return r; }
         // 输出目录可能还没建，自动创建
         try {
           if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true });
         } catch (e) {
           r.error = '无法创建输出文件夹：' + e.message;
-          results.push(r);
-          continue;
+          return r;
         }
         const outExt = '.' + outFmt;
         // 扩展名变了就用新扩展名；没变则保持原名
@@ -532,25 +624,115 @@ ipcMain.handle('batch:process', async (evt, opts) => {
       r.outPath = outPath;
       r.outName = path.basename(outPath);
       r.size = fs.statSync(outPath).size;
+
+      if (mode === 'overwrite') {
+        written.push({ filePath: item.filePath, outPath, mode, backupPath });
+      } else if (outPath.toLowerCase() !== item.filePath.toLowerCase()) {
+        written.push({ filePath: item.filePath, outPath, mode, backupPath: null });
+      }
     } catch (e) {
       r.error = e.message;
     }
+    return r;
+  };
+
+  for (let i = 0; i < total; i++) {
+    if (batchCancelRequested) break;
+    const item = files[i];
+    const r = processOne(item);
     results.push(r);
+    if (r.ok) okCount++;
+    translatedTotal += r.translated || 0;
+    entriesTotal += r.total || 0;
+
+    // 让出事件循环：大文件量时界面仍可响应（进度/终止）
+    await new Promise((res) => setImmediate(res));
+
+    const now = Date.now();
+    if (now - lastAt > 100 || i === total - 1) {
+      lastAt = now;
+      sendBatchProgress(evt, {
+        phase: 'process',
+        done: results.length,
+        total,
+        current: item.name,
+        ok: okCount,
+        failed: results.length - okCount,
+        translated: translatedTotal,
+        entries: entriesTotal,
+      });
+    }
   }
 
-  const okCount = results.filter((r) => r.ok).length;
+  lastBatchRun = { mode, backupDir: backupRoot, written };
+
   return {
     ok: true,
+    // 全部处理完时即使用户刚点了终止，也不算「中断」，避免误触发回滚
+    canceled: batchCancelRequested && results.length < total,
     results,
+    backupDir: backupRoot,
     summary: {
       total: results.length,
       success: okCount,
       failed: results.length - okCount,
-      translated: results.reduce((s, r) => s + (r.translated || 0), 0),
-      entries: results.reduce((s, r) => s + (r.total || 0), 0),
+      translated: translatedTotal,
+      entries: entriesTotal,
+      authorFixed: results.filter((r) => r.authorFixed).length,
     },
   };
 });
+
+/** 请求终止当前批量任务 */
+ipcMain.handle('batch:cancel', async () => {
+  batchCancelRequested = true;
+  return { ok: true };
+});
+
+/** 终止后询问是否恢复已处理的文件 */
+ipcMain.handle('batch:confirmRollback', async () => {
+  const n = lastBatchRun ? lastBatchRun.written.length : 0;
+  const res = await dialog.showMessageBox(win, {
+    type: 'question',
+    buttons: ['恢复为原文件', '保留已处理的文件'],
+    defaultId: 0,
+    cancelId: 1,
+    noLink: true,
+    title: '批量处理已终止',
+    message: '是否将已处理的文件恢复为原文件？',
+    detail: n
+      ? `本次已经处理 ${n} 个文件。选择「恢复为原文件」会撤销这些文件的改动。`
+      : '本次还没有写入任何文件，无需恢复。',
+  });
+  return { restore: res.response === 0 };
+});
+
+/** 回滚最近一次批量任务：覆盖模式恢复备份，其它模式删除新生成的文件 */
+ipcMain.handle('batch:rollback', async () => {
+  if (!lastBatchRun) return { ok: false, error: '没有可恢复的批量任务' };
+
+  let restored = 0;
+  let removed = 0;
+  let failed = 0;
+  for (const w of lastBatchRun.written.slice().reverse()) {
+    try {
+      if (w.mode === 'overwrite') {
+        if (w.backupPath && fs.existsSync(w.backupPath)) {
+          fs.copyFileSync(w.backupPath, w.filePath);
+          restored++;
+        }
+      } else if (w.outPath && fs.existsSync(w.outPath)) {
+        fs.unlinkSync(w.outPath);
+        removed++;
+      }
+    } catch (e) {
+      failed++;
+    }
+  }
+  lastBatchRun = null;
+  return { ok: true, restored, removed, failed };
+});
+
 
 /** 打开外部链接（关于对话框用） */
 ipcMain.handle('shell:openExternal', async (evt, url) => {

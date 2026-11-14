@@ -37,7 +37,25 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // ---------------------------------------------------------------- 工具栏
 function bindToolbar() {
-  $('btnOpen').onclick = doOpen;
+  // 「打开」下拉：打开文件 / 打开文件夹（文件夹即批量处理）
+  $('btnOpen').onclick = (e) => {
+    e.stopPropagation();
+    $('openMenu').classList.toggle('hidden');
+  };
+  $('openMenu').onclick = (e) => e.stopPropagation();
+  document.addEventListener('click', () => $('openMenu').classList.add('hidden'));
+
+  $('btnOpenFile').onclick = () => {
+    closeOpenMenu();
+    doOpen();
+  };
+  $('btnOpenFolder').onclick = async () => {
+    closeOpenMenu();
+    const res = await window.api.pickDir();
+    if (!res || !res.dir) return;
+    openBatchDialog(res.dir);
+  };
+
   $('btnSave').onclick = () => openSaveDialog();
   $('btnSaveAs').onclick = () => openSaveDialog();
   $('btnConvert').onclick = openConvertDialog;
@@ -45,8 +63,11 @@ function bindToolbar() {
   $('btnTranslateAll').onclick = doTranslateAll;
   $('btnRevertAll').onclick = doRevertAll;
   $('btnSettings').onclick = () => $('settingsModal').classList.remove('hidden');
-  $('btnBatch').onclick = openBatchDialog;
   $('btnAbout').onclick = openAboutDialog;
+}
+
+function closeOpenMenu() {
+  $('openMenu').classList.add('hidden');
 }
 
 function setEnabled(on) {
@@ -603,6 +624,7 @@ const batchState = {
   dir: '',
   files: [],
   skipped: [],
+  busy: false,
 };
 
 function bindBatch() {
@@ -621,7 +643,7 @@ function bindBatch() {
     if (!res || !res.dir) return;
     $('batchOutDir').value = res.dir;
   };
-  $('btnBatchCancel').onclick = () => $('batchModal').classList.add('hidden');
+  $('btnBatchCancel').onclick = onBatchCancelClick;
   $('btnBatchRun').onclick = runBatch;
   $('batchSignature').oninput = updateBatchSigPreview;
   $('btnBatchEditSig').onclick = (e) => {
@@ -630,16 +652,25 @@ function bindBatch() {
     $('settingsModal').classList.remove('hidden');
     updateSigPreview();
   };
+
+  // 主进程推送的扫描 / 处理进度
+  window.api.onBatchProgress(updateBatchProgress);
 }
 
-/** 打开批量处理对话框 */
-function openBatchDialog() {
+/** 打开批量处理对话框；传入 dir 时直接扫描该文件夹 */
+function openBatchDialog(dir) {
   $('batchModal').classList.remove('hidden');
   $('batchResult').classList.add('hidden');
+  $('batchProgress').classList.add('hidden');
   updateBatchHints();
   // 署名框填当前模板（不是渲染后的结果）——主进程会按每个文件分别渲染
   $('batchSignature').value = (state.settings.signature || '').trim();
   updateBatchSigPreview();
+
+  if (dir) {
+    $('batchDir').value = dir;
+    scanBatchDir();
+  }
 }
 
 /** 更新批量对话框里的署名预览 */
@@ -659,11 +690,59 @@ function updateBatchHints() {
   const mode = $('batchMode').value;
   const hints = {
     suffix: '在原文件名后加 _CN 后缀，存到原目录。原文件保持不变，最安全。',
-    overwrite: '直接覆盖原文件。覆盖前会自动在同目录留下一个 .bak 备份。',
+    overwrite: '直接覆盖原文件。处理前会把原文件复制到同目录的「_PS5汉化备份」文件夹里，不再生成同目录 .bak。',
     folder: '全部输出到指定文件夹，文件名保持不变（扩展名按所选格式调整）。',
   };
   $('batchModeHint').textContent = hints[mode] || '';
   $('batchOutRow').classList.toggle('hidden', mode !== 'folder');
+}
+
+/** 显示 / 更新批量进度 */
+function updateBatchProgress(p) {
+  if (!p) return;
+  $('batchProgress').classList.remove('hidden');
+  const pct = p.total ? Math.min(100, Math.round((p.done / p.total) * 100)) : 0;
+  $('bpPhase').textContent = p.phase === 'scan' ? '正在扫描文件夹…' : '正在处理文件…';
+  $('bpPct').textContent = pct + '%';
+  $('bpFill').style.width = pct + '%';
+
+  let sub = `${p.done}/${p.total}`;
+  if (p.current) sub += '  ' + p.current;
+  if (p.phase === 'process') sub += `  ·  已译 ${p.translated || 0}/${p.entries || 0} 条`;
+  $('bpSub').textContent = sub;
+
+  if (p.phase === 'process') {
+    setStatus(`批量处理中 ${p.done}/${p.total}：${p.current || ''}`);
+  } else {
+    setStatus(`正在扫描 ${p.done}/${p.total}：${p.current || ''}`);
+  }
+}
+
+/** 处理中禁用相关控件 */
+function setBatchBusy(on) {
+  batchState.busy = on;
+  $('btnBatchPick').disabled = on;
+  $('btnBatchRescan').disabled = on;
+  $('batchRecursive').disabled = on;
+  $('batchMode').disabled = on;
+  $('batchFormat').disabled = on;
+  $('batchSignature').disabled = on;
+  $('batchSkipUnchanged').disabled = on;
+  $('btnBatchRun').disabled = on || batchState.files.length === 0;
+  $('btnBatchRun').textContent = on ? '处理中…' : '开始处理';
+  $('btnBatchCancel').textContent = on ? '终止' : '关闭';
+  $('btnBatchCancel').disabled = false;
+}
+
+/** 「关闭 / 终止」按钮 */
+async function onBatchCancelClick() {
+  if (batchState.busy) {
+    $('btnBatchCancel').textContent = '正在终止…';
+    $('btnBatchCancel').disabled = true;
+    await window.api.batchCancel();
+    return;
+  }
+  $('batchModal').classList.add('hidden');
 }
 
 /** 扫描目录 */
@@ -673,16 +752,26 @@ async function scanBatchDir() {
 
   $('batchScanInfo').textContent = '正在扫描...';
   $('batchFileList').classList.add('hidden');
-  $('batchRun') && ($('btnBatchRun').disabled = true);
+  $('batchResult').classList.add('hidden');
+  setBatchBusy(true);
+  $('btnBatchRun').textContent = '扫描中…';
 
   const res = await window.api.batchScan({
     dir,
     recursive: $('batchRecursive').checked,
   });
 
+  setBatchBusy(false);
+
   if (!res.ok) {
     $('batchScanInfo').textContent = '扫描失败：' + res.error;
     batchState.files = [];
+    return;
+  }
+  if (res.canceled) {
+    batchState.files = [];
+    $('batchScanInfo').textContent = '已取消扫描';
+    $('batchProgress').classList.add('hidden');
     return;
   }
 
@@ -698,17 +787,22 @@ async function scanBatchDir() {
   }
   $('batchScanInfo').textContent = info;
 
-  // 渲染文件列表
+  // 超大目录只渲染前 500 行，避免界面卡死
+  const MAX_ROWS = 500;
+  const shown = batchState.files.slice(0, MAX_ROWS);
   const list = $('batchFileList');
-  list.innerHTML = batchState.files.map((f) => `
+  list.innerHTML = shown.map((f) => `
     <div class="batch-row">
       <span class="b-fmt">${f.ext}</span>
-      <span class="b-name" title="${f.name}">${f.name}</span>
-      <span class="b-game" title="${f.game || ''}">${f.game || '—'}</span>
+      <span class="b-name" title="${escapeHtml(f.name)}">${escapeHtml(f.name)}</span>
+      <span class="b-game" title="${escapeHtml(f.game || '')}">${escapeHtml(f.game || '—')}</span>
       <span class="b-stat">${f.count} 条</span>
     </div>
-  `).join('');
+  `).join('') + (total > shown.length
+    ? `<div class="batch-row"><span class="b-game">仅显示前 ${MAX_ROWS} 个，共 ${total} 个文件</span></div>`
+    : '');
   list.classList.toggle('hidden', total === 0);
+  $('batchProgress').classList.add('hidden');
   $('btnBatchRun').disabled = total === 0;
 }
 
@@ -722,13 +816,13 @@ async function runBatch() {
     return;
   }
 
-  const btn = $('btnBatchRun');
-  btn.disabled = true;
-  btn.textContent = '处理中...';
+  $('batchResult').classList.add('hidden');
+  setBatchBusy(true);
 
   const res = await window.api.batchProcess({
     dir: batchState.dir,
-    files: batchState.files,
+    // 只传主进程需要的字段，避免几万条记录跨进程传输时卡顿
+    files: batchState.files.map((f) => ({ filePath: f.filePath, name: f.name, ext: f.ext })),
     mode,
     outDir,
     recursive: $('batchRecursive').checked,
@@ -741,8 +835,7 @@ async function runBatch() {
     skipUnchanged: $('batchSkipUnchanged').checked,
   });
 
-  btn.disabled = false;
-  btn.textContent = '开始处理';
+  setBatchBusy(false);
 
   if (!res.ok) {
     setStatus('批量处理失败：' + res.error, true);
@@ -750,27 +843,60 @@ async function runBatch() {
   }
 
   renderBatchResult(res);
+
+  if (res.canceled) {
+    setStatus(`批量处理已终止：已处理 ${res.summary.total} 个文件`, true);
+    const ask = await window.api.batchConfirmRollback();
+    if (ask && ask.restore) {
+      const rb = await window.api.batchRollback();
+      if (rb.ok) {
+        setStatus(`已恢复原文件 ${rb.restored} 个${
+          rb.removed ? `，删除新生成 ${rb.removed} 个` : ''
+        }${rb.failed ? `，${rb.failed} 个失败` : ''}`);
+      } else {
+        setStatus('恢复失败：' + (rb.error || ''), true);
+      }
+    } else {
+      setStatus('已保留已处理的文件');
+    }
+    return;
+  }
+
   const s = res.summary;
   setStatus(`批量处理完成：${s.success}/${s.total} 个文件成功，翻译 ${s.translated}/${s.entries} 条`);
 }
 
 function renderBatchResult(res) {
-  const s = res.summary;
+  const s = res.summary || {};
   const box = $('batchResult');
-  const lines = res.results.map((r) => {
+  const all = res.results || [];
+  const MAX_LINES = 300;
+
+  const lines = all.slice(0, MAX_LINES).map((r) => {
     if (!r.ok) {
-      return `<div class="br-line"><span class="bl-name">${r.name}</span><span class="br-fail">✗ ${r.error || '失败'}</span></div>`;
+      return `<div class="br-line"><span class="bl-name">${escapeHtml(r.name)}</span><span class="br-fail">✗ ${escapeHtml(r.error || '失败')}</span></div>`;
     }
-    let detail = `${r.translated}/${r.total} 条已译`;
+    let detail = `${r.translated || 0}/${r.total || 0} 条已译`;
+    if (r.authorFixed) detail += ' · 作者已统一';
     if (r.outName) detail += ` → ${r.outName}`;
     else if (r.skipped) detail = r.skipped;
-    return `<div class="br-line"><span class="bl-name">${r.name}</span><span class="br-ok">✓ ${detail}</span></div>`;
+    return `<div class="br-line"><span class="bl-name">${escapeHtml(r.name)}</span><span class="br-ok">✓ ${escapeHtml(detail)}</span></div>`;
   }).join('');
 
-  box.innerHTML = `
-    <div class="br-line"><b>完成</b>：${s.success}/${s.total} 个文件，翻译 ${s.translated}/${s.entries} 条${
+  const head = res.canceled
+    ? `<b>已终止</b>：已处理 ${s.total || 0} 个文件，翻译 ${s.translated || 0}/${s.entries || 0} 条`
+    : `<b>完成</b>：${s.success || 0}/${s.total || 0} 个文件，翻译 ${s.translated || 0}/${s.entries || 0} 条${
       s.failed ? `，${s.failed} 个失败` : ''
-    }</div>
+    }`;
+
+  const extras = [];
+  if (s.authorFixed) extras.push(`<div class="ed-hint">已统一作者：${s.authorFixed} 个文件</div>`);
+  if (res.backupDir) extras.push(`<div class="ed-hint">原文件备份目录：${escapeHtml(res.backupDir)}</div>`);
+  if (all.length > MAX_LINES) extras.push(`<div class="ed-hint">仅显示前 ${MAX_LINES} 条记录</div>`);
+
+  box.innerHTML = `
+    <div class="br-line">${head}</div>
+    ${extras.join('')}
     <div style="height:6px"></div>
     ${lines}
   `;
