@@ -16,7 +16,7 @@ function section(t) { console.log('\n========== ' + t + ' =========='); }
 
 // ---------------------------------------------------------------- 工具
 const ROOT = __dirname;
-const CH = 'I:/PS5相关备份/折腾项目/PS5-Repository-List/local/cheats/HEN-Cheats-Collection/cheats';
+const { CH, MC4_SAMPLE } = require('./test-paths');
 
 function mkTmpDir(name) {
   const d = path.join(ROOT, '.tmp-' + name);
@@ -105,7 +105,7 @@ section('批量处理：扫描与产出');
   fs.rmSync(outDir, { recursive: true, force: true });
 
   const samples = [];
-  const mc4Src = 'I:/下载/CUSA18740_01.08.mc4';
+  const mc4Src = MC4_SAMPLE;
   if (fs.existsSync(mc4Src)) samples.push([mc4Src, 'mc4']);
   if (fs.existsSync(CH)) {
     const shn = path.join(CH, 'shn', 'CUSA00004_01.07_d083461a.shn');

@@ -1,0 +1,82 @@
+{
+  "name": "inFamous: Second Son",
+  "id": "CUSA00004",
+  "version": "01.07",
+  "process": "eboot.bin",
+  "mods": [
+    {
+      "name": "Godmode",
+      "type": "checkbox",
+      "memory": [
+        {
+          "offset": "215C17",
+          "on": "909090909090909090",
+          "off": "C4C17A119650EE0100"
+        }
+      ]
+    },
+    {
+      "name": "Infinite Energy",
+      "type": "checkbox",
+      "memory": [
+        {
+          "offset": "215C22",
+          "on": "90909090",
+          "off": "00000000"
+        }
+      ]
+    },
+    {
+      "name": "Infinite Health",
+      "type": "checkbox",
+      "memory": [
+        {
+          "offset": "215C30",
+          "on": "90909090",
+          "off": "00000000"
+        }
+      ]
+    },
+    {
+      "name": "Max Money",
+      "type": "checkbox",
+      "memory": [
+        {
+          "offset": "215C40",
+          "on": "FFFFFFFF",
+          "off": "00000000"
+        }
+      ]
+    },
+    {
+      "name": "Unlimited Ammo",
+      "type": "checkbox",
+      "memory": [
+        {
+          "offset": "215C50",
+          "on": "90909090",
+          "off": "00000000"
+        }
+      ]
+    },
+    {
+      "name": "Super Speed",
+      "type": "checkbox",
+      "memory": [
+        {
+          "offset": "215C60",
+          "on": "40000000",
+          "off": "0000803F"
+        },
+        {
+          "offset": "215C70",
+          "on": "40000000",
+          "off": "0000803F"
+        }
+      ]
+    }
+  ],
+  "credits": [
+    "Weysincha"
+  ]
+}

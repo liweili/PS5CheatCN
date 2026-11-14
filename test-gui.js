@@ -89,7 +89,7 @@ function ok(c, m, e) { if (c) { pass++; console.log('  [PASS] ' + m); } else { f
 
 // ============================================================
 console.log('========== GUI 逻辑：加载模型 ==========');
-const CH = 'I:\\PS5相关备份\\折腾项目\\PS5-Repository-List\\local\\cheats\\HEN-Cheats-Collection\\cheats';
+const { CH, MC4_SAMPLE } = require('./test-paths');
 
 {
   const p = path.join(CH, 'shn', 'CUSA00004_01.07_d083461a.shn');
@@ -172,7 +172,7 @@ console.log('========== GUI 逻辑：保存到原格式（SHN） ==========');
 
 console.log('========== GUI 逻辑：MC4 保存往返 ==========');
 {
-  const src = 'I:\\下载\\CUSA18740_01.08.mc4';
+  const src = MC4_SAMPLE;
   const txt = fs.readFileSync(src, 'utf8');
   const model = F.parseCheatFile(src, txt);
   model.mods[0].name = '无限体力';

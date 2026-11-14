@@ -3,8 +3,7 @@
 const fs = require('fs');
 const path = require('path');
 const F = require('./src/formats');
-
-const CH = 'I:\\PS5相关备份\\折腾项目\\PS5-Repository-List\\local\\cheats\\HEN-Cheats-Collection\\cheats';
+const { CH, MC4_SAMPLE } = require('./test-paths');
 let pass = 0, fail = 0;
 function ok(cond, msg, extra) {
   if (cond) { pass++; console.log('  [PASS] ' + msg); }
@@ -13,7 +12,7 @@ function ok(cond, msg, extra) {
 
 console.log('========== 1. MC4 解密/加密往返 ==========');
 {
-  const p = 'I:\\下载\\CUSA18740_01.08.mc4';
+  const p = MC4_SAMPLE;
   const txt = fs.readFileSync(p, 'utf8');
   const model = F.parseCheatFile(p, txt);
   ok(model.format === 'mc4', '识别为 mc4 格式');

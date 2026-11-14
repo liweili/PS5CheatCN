@@ -10,6 +10,7 @@ const T = require('./src/translator');
 const C = require('./src/text-cleaner');
 const G = require('./src/game-terms');
 const F = require('./src/formats');
+const { MC4_SAMPLE } = require('./test-paths');
 
 let pass = 0, fail = 0;
 function ok(c, m, e) { if (c) { pass++; console.log('  [PASS] ' + m); } else { fail++; console.log('  [FAIL] ' + m + (e ? '  -> ' + e : '')); } }
@@ -105,7 +106,7 @@ console.log('========== 3. 翻译时自动修正乱码 ==========');
 
 console.log('========== 4. 跨格式转换写入署名 ==========');
 {
-  const src = 'I:\\下载\\CUSA18740_01.08.mc4';
+  const src = MC4_SAMPLE;
   const model = F.parseCheatFile(src, fs.readFileSync(src, 'utf8'));
   const sig = '————翻译：L.wl，编辑时间20261104————';
 
@@ -143,7 +144,7 @@ console.log('========== 4. 跨格式转换写入署名 ==========');
 
 console.log('========== 5. 三种格式署名行为一致 ==========');
 {
-  const src = 'I:\\下载\\CUSA18740_01.08.mc4';
+  const src = MC4_SAMPLE;
   const model = F.parseCheatFile(src, fs.readFileSync(src, 'utf8'));
   const sig = '————翻译：L.wl，编辑时间20261104————';
 
