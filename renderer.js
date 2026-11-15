@@ -31,6 +31,7 @@ document.addEventListener('DOMContentLoaded', () => {
   bindAbout();
   bindMenu();
   bindDragDrop();
+  bindSystemOpen();
   loadSettings();
   updateStat();
 });
@@ -108,6 +109,10 @@ function loadModel(filePath, model) {
   }));
   state.selected = -1;
   state.dirty = false;
+
+  // 打开新文件时清掉上一份文件的搜索条件，避免新内容被旧条件过滤
+  $('searchBox').value = '';
+  $('onlyUntranslated').checked = false;
 
   // 保留原始文本，供定点替换用
   state.raw = model.raw;
@@ -1029,9 +1034,23 @@ function bindDragDrop() {
     if (hint) { hint.remove(); hint = null; }
     const f = e.dataTransfer.files[0];
     if (!f) return;
-    const res = await window.api.openPath(f.path);
+    const filePath = window.api.getFilePath(f);
+    if (!filePath) {
+      setStatus('读取拖入文件路径失败，请改用「打开文件」', true);
+      return;
+    }
+    const res = await window.api.openPath(filePath);
     if (res.ok) loadModel(res.filePath, res.model);
     else setStatus('打开失败：' + res.error, true);
+  });
+}
+
+// ---------------------------------------------------------------- 系统打开（双击关联文件）
+function bindSystemOpen() {
+  window.api.onOpenFromSystem((res) => {
+    if (!res) return;
+    if (res.ok) loadModel(res.filePath, res.model);
+    else setStatus('打开失败：' + (res.error || '未知错误'), true);
   });
 }
 

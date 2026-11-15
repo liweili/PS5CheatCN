@@ -285,6 +285,30 @@ section('批量处理界面元素');
   ok(html.includes('value="folder"'), '支持「输出到指定文件夹」模式');
 }
 
+// ================================================================ 文件关联与拖放
+section('文件关联双击与拖放打开');
+{
+  const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
+  const main = fs.readFileSync(path.join(ROOT, 'main.js'), 'utf8');
+  const preload = fs.readFileSync(path.join(ROOT, 'preload.js'), 'utf8');
+  const renderer = fs.readFileSync(path.join(ROOT, 'renderer.js'), 'utf8');
+
+  const exts = (pkg.build.fileAssociations || []).map((a) => a.ext);
+  ok(exts.includes('mc4') && exts.includes('shn') && exts.includes('json'), '打包配置关联 MC4 / SHN / JSON');
+
+  ok(main.includes('requestSingleInstanceLock()'), '单实例锁：双击文件复用已有窗口');
+  ok(main.includes("app.on('second-instance'"), '有 second-instance 处理');
+  ok(main.includes("app.on('open-file'"), '有 macOS open-file 处理');
+  ok(main.includes("'file:openFromSystem'"), '有系统打开文件的消息推送');
+  ok(main.includes('findOpenablePath'), '能从命令行参数识别金手指文件');
+
+  ok(preload.includes('webUtils.getPathForFile'), '拖拽用 webUtils 取真实路径');
+  ok(preload.includes('onOpenFromSystem'), 'preload 暴露 onOpenFromSystem');
+  ok(renderer.includes('function bindSystemOpen'), 'renderer 有 bindSystemOpen');
+  ok(renderer.includes('window.api.getFilePath(f)'), 'drop 不再使用已移除的 File.path');
+  ok(!renderer.includes('openPath(f.path)'), 'drop 不再使用已移除的 File.path（旧写法）');
+}
+
 // ================================================================ 汇总
 console.log('\n========================================');
 console.log(`  通过 ${pass} / 失败 ${fail}`);

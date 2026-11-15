@@ -12,6 +12,48 @@ const GITHUB_URL = 'https://github.com/liweili/PS5CheatCN';
 /** 当前版本号（从 package.json 读） */
 const APP_VERSION = require('./package.json').version;
 
+/** 可关联打开/拖入的扩展名（与 package.json 的 fileAssociations 一致） */
+const OPENABLE_EXTS = ['.mc4', '.shn', '.json'];
+/** 系统传入、等待窗口就绪后再打开的文件路径 */
+let pendingOpenPath = null;
+/** 渲染层是否已挂载完毕（未挂载时发消息会丢） */
+let rendererReady = false;
+
+/**
+ * 从命令行参数里找出可打开的金手指文件。
+ * 开发模式（electron .）与打包模式的 argv 位置不同，按扩展名 + 存在性筛选。
+ */
+function findOpenablePath(argv) {
+  for (const arg of (argv || []).slice(1)) {
+    if (!arg || arg.startsWith('-')) continue;
+    if (!OPENABLE_EXTS.includes(path.extname(arg).toLowerCase())) continue;
+    try {
+      if (fs.existsSync(arg) && fs.statSync(arg).isFile()) return path.resolve(arg);
+    } catch (e) { /* 忽略非法路径 */ }
+  }
+  return null;
+}
+
+/**
+ * 打开系统传入的文件（双击关联文件 / 命令行参数）。
+ * 结果推给渲染层，由渲染层用新文件替换旧文件的显示。
+ */
+function openFileFromSystem(filePath) {
+  if (!filePath) return;
+  // 窗口还没建好或页面还没加载完：先记下来，did-finish-load 后再送
+  if (!win || win.isDestroyed() || !rendererReady) {
+    pendingOpenPath = filePath;
+    return;
+  }
+  try {
+    const text = fs.readFileSync(filePath, 'utf8');
+    const model = F.parseCheatFile(filePath, text);
+    win.webContents.send('file:openFromSystem', { ok: true, filePath, model: packModel(model) });
+  } catch (e) {
+    win.webContents.send('file:openFromSystem', { ok: false, filePath, error: e.message });
+  }
+}
+
 function createWindow() {
   win = new BrowserWindow({
     width: 1280,
@@ -29,13 +71,23 @@ function createWindow() {
     },
   });
 
+  rendererReady = false;
+  win.webContents.on('did-start-loading', () => { rendererReady = false; });
   win.loadFile('index.html');
 
   // 把版本号注入渲染层（关于对话框显示用）
   win.webContents.on('did-finish-load', () => {
+    rendererReady = true;
     win.webContents.executeJavaScript(
       `window.__APP_VERSION__ = ${JSON.stringify(APP_VERSION)};`
     ).catch(() => { /* 注入失败不影响功能 */ });
+
+    // 双击关联文件启动时，页面就绪后再把文件送进界面
+    if (pendingOpenPath) {
+      const p = pendingOpenPath;
+      pendingOpenPath = null;
+      openFileFromSystem(p);
+    }
   });
 
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
@@ -75,7 +127,28 @@ function buildMenu() {
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }
 
+// 文件关联双击：只保留一个实例，后续启动把文件转交给已有窗口
+const singleInstance = app.requestSingleInstanceLock();
+if (!singleInstance) app.quit();
+
+app.on('second-instance', (event, argv) => {
+  const p = findOpenablePath(argv);
+  if (win && !win.isDestroyed()) {
+    if (win.isMinimized()) win.restore();
+    win.focus();
+  }
+  if (p) openFileFromSystem(p);
+});
+
+// macOS：Finder 里双击关联文件
+app.on('open-file', (event, filePath) => {
+  event.preventDefault();
+  openFileFromSystem(filePath);
+});
+
 app.whenReady().then(() => {
+  if (!singleInstance) return;
+
   // 先搬说明文档，再建窗口。
   // 放在 createWindow 之前是为了保证：即使窗口创建失败（无显卡/沙箱环境），
   // 说明文档也已经复制到位。
@@ -83,6 +156,11 @@ app.whenReady().then(() => {
 
   buildMenu();
   createWindow();
+
+  // 首次启动时由命令行带入的文件（双击关联文件）。
+  // 此时页面可能还没挂载好监听器，先存成待打开项，did-finish-load 后再送。
+  const initialPath = findOpenablePath(process.argv);
+  if (initialPath) pendingOpenPath = initialPath;
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

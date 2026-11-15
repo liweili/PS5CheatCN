@@ -1,7 +1,7 @@
 {
   "name": "ps5-cheat-cn",
   "productName": "PS5金手指自动汉化工具",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "description": "PS5/PS4 金手指自动汉化工具，支持 MC4 / SHN / JSON",
   "main": "main.js",
   "author": "L.wl",
@@ -31,6 +31,29 @@
       "src/**/*",
       "使用说明.md",
       "build/icon.png"
+    ],
+    "fileAssociations": [
+      {
+        "ext": "mc4",
+        "name": "PS5CheatMC4",
+        "description": "PS5 金手指文件（MC4 加密）",
+        "icon": "build/icon.ico",
+        "role": "Viewer"
+      },
+      {
+        "ext": "shn",
+        "name": "PS5CheatSHN",
+        "description": "PS5 金手指文件（SHN XML）",
+        "icon": "build/icon.ico",
+        "role": "Viewer"
+      },
+      {
+        "ext": "json",
+        "name": "PS5CheatJSON",
+        "description": "PS5 金手指文件（JSON）",
+        "icon": "build/icon.ico",
+        "role": "Viewer"
+      }
     ],
     "win": {
       "target": [

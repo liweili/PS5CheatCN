@@ -1,9 +1,11 @@
 'use strict';
-const { contextBridge, ipcRenderer } = require('electron');
+const { contextBridge, ipcRenderer, webUtils } = require('electron');
 
 contextBridge.exposeInMainWorld('api', {
   openFile: () => ipcRenderer.invoke('file:open'),
   openPath: (p) => ipcRenderer.invoke('file:openPath', p),
+  // Electron 32 起 File.path 已移除，拖拽文件的真实路径必须通过 webUtils 获取
+  getFilePath: (file) => webUtils.getPathForFile(file),
   save: (payload) => ipcRenderer.invoke('file:save', payload),
   saveAs: (payload) => ipcRenderer.invoke('file:saveAs', payload),
   saveTo: (payload) => ipcRenderer.invoke('file:saveTo', payload),
@@ -20,4 +22,5 @@ contextBridge.exposeInMainWorld('api', {
   batchConfirmRollback: () => ipcRenderer.invoke('batch:confirmRollback'),
   onBatchProgress: (cb) => ipcRenderer.on('batch:progress', (e, p) => cb(p)),
   onMenu: (cb) => ipcRenderer.on('menu', (e, action) => cb(action)),
+  onOpenFromSystem: (cb) => ipcRenderer.on('file:openFromSystem', (e, payload) => cb(payload)),
 });
